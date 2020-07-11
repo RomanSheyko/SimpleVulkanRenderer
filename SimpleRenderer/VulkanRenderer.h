@@ -65,7 +65,6 @@
 #endif
 /*---------------------------------------------------------------------------------*/
 #define PHYSICAL_DEVICE_NUM 0 //temporary
-#define ALLOCATOR nullptr
 #ifdef DEBUG_APPLICATION
 VKAPI_ATTR VkBool32 VKAPI_CALL vulkanDebugCallback(
 	VkDebugReportFlagsEXT flags,
@@ -77,6 +76,7 @@ VKAPI_ATTR VkBool32 VKAPI_CALL vulkanDebugCallback(
 	const char* msg,
 	void* userData);
 #endif
+#include "Allocator.h"
 
 class VulkanRenderer
 {
@@ -85,6 +85,7 @@ private:
 	VkDevice logical_device;
 	uint32_t number_of_selected_device;
 	uint32_t queueFamilyPropertyCount;
+	VkAllocationCallbacks* allocator;
 #ifdef DEBUG_APPLICATION
 	VkDebugReportCallbackEXT reportCallback;
 #endif
@@ -101,7 +102,7 @@ private:
 	void setQueues();
 	void createLogicalDevice();
 public:
-	VulkanRenderer();
+	VulkanRenderer(VkAllocationCallbacks* allocator = nullptr);
 	~VulkanRenderer();
 };
 

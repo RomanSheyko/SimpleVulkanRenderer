@@ -4,11 +4,12 @@
 //#include <SDL2/SDL_vulkan.h>
 #include <vector>
 #include "VulkanRenderer.h"
+#include "Allocator.h"
 #define RENDERER VulkanRenderer
 
 int main(int argc, char* argv[]) {
 	try {
-		RENDERER renderer;
+		RENDERER renderer();
 	}
 	catch (RendererException & e) {
 		std::cout << e.what() << std::endl;

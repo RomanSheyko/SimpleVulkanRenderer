@@ -1,8 +1,9 @@
 #include "VulkanRenderer.h"
 #include <iostream>
 
-VulkanRenderer::VulkanRenderer()
+VulkanRenderer::VulkanRenderer(VkAllocationCallbacks* allocator)
 {
+	this->allocator = allocator;
 	initInstance();
 #ifdef DEBUG_APPLICATION
 	VkDebugReportCallbackCreateInfoEXT debugReportCallbackcreateInfo = {};
@@ -25,9 +26,9 @@ VulkanRenderer::VulkanRenderer()
 VulkanRenderer::~VulkanRenderer() {
 	//destroying logical device 
 	vkDeviceWaitIdle(logical_device);
-	vkDestroyDevice(logical_device, ALLOCATOR);
+	vkDestroyDevice(logical_device, allocator);
 	//destroying instance
-	vkDestroyInstance(instance, ALLOCATOR);
+	vkDestroyInstance(instance, allocator);
 }
 
 void VulkanRenderer::initInstance() {
@@ -105,14 +106,14 @@ void VulkanRenderer::initInstance() {
 	info.pApplicationInfo = &app_info;
 	if (!requiredInstanceExtentions.empty()) {
 		info.ppEnabledExtensionNames = requiredInstanceExtentions.data();
-		info.enabledExtensionCount = requiredInstanceExtentions.size();
+		info.enabledExtensionCount = (uint32_t)requiredInstanceExtentions.size();
 	}
 	if (!requiredInstanceLayers.empty()) {
 		info.ppEnabledLayerNames = requiredInstanceLayers.data();
-		info.enabledLayerCount = requiredInstanceLayers.size();
+		info.enabledLayerCount = (uint32_t)requiredInstanceLayers.size();
 	}
 
-	if (vkCreateInstance(&info, ALLOCATOR, &instance) != VK_SUCCESS)
+	if (vkCreateInstance(&info, allocator, &instance) != VK_SUCCESS)
 		throw RendererException("unable to create instance");
 }
 
@@ -222,19 +223,19 @@ void VulkanRenderer::createLogicalDevice() {
 		}
 	}
 	const VkDeviceCreateInfo deviceCreateInfo = {
-		VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO, //sType
-		nullptr,                              //pNext
-		0,                                    //flags
-		1,                                    //queueCreateInfoCount
-		&deviceQueueCreateInfo,               //pQueueCreateInfos
-		requiredDeviceLayers.size(),          //enabledLayerCount
-		requiredDeviceLayers.data(),          //ppEnabledLayerNames
-		requiredDeviceExtensions.size(),      //enabledExtentionCount
-		requiredDeviceExtensions.data(),      //ppEnabledExtensionNames
-		&requiredDeviceFeatures               //pEnabledFeatures
+		VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO,      //sType
+		nullptr,                                   //pNext
+		0,                                         //flags
+		1,                                         //queueCreateInfoCount
+		&deviceQueueCreateInfo,                    //pQueueCreateInfos
+		(uint32_t)requiredDeviceLayers.size(),     //enabledLayerCount
+		requiredDeviceLayers.data(),               //ppEnabledLayerNames
+		(uint32_t)requiredDeviceExtensions.size(), //enabledExtentionCount
+		requiredDeviceExtensions.data(),           //ppEnabledExtensionNames
+		&requiredDeviceFeatures                    //pEnabledFeatures
 	};
 
-	if (vkCreateDevice(physicalDevices[number_of_selected_device], &deviceCreateInfo, ALLOCATOR, &logical_device) != VK_SUCCESS) {
+	if (vkCreateDevice(physicalDevices[number_of_selected_device], &deviceCreateInfo, allocator, &logical_device) != VK_SUCCESS) {
 		throw RendererException("unable to create logical device");
 	}
 }
