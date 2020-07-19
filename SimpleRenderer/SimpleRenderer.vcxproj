@@ -148,12 +148,16 @@
   <ItemGroup>
     <ClCompile Include="main.cpp" />
     <ClCompile Include="Allocator.cpp" />
+    <ClCompile Include="SDLSubsystem.cpp" />
     <ClCompile Include="VulkanRenderer.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="Allocator.h" />
     <ClInclude Include="RendererException.h" />
+    <ClInclude Include="SDLSubsystem.h" />
     <ClInclude Include="VulkanRenderer.h" />
+    <ClInclude Include="WindowSubsystem.h" />
+    <ClInclude Include="WindowSubsystemException.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

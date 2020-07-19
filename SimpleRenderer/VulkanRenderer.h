@@ -81,11 +81,11 @@ VKAPI_ATTR VkBool32 VKAPI_CALL vulkanDebugCallback(
 class VulkanRenderer
 {
 private:
-	VkInstance instance;
 	VkDevice logical_device;
 	uint32_t number_of_selected_device;
 	uint32_t queueFamilyPropertyCount;
 	VkAllocationCallbacks* allocator;
+	uint32_t graphics_famaly_index;
 #ifdef DEBUG_APPLICATION
 	VkDebugReportCallbackEXT reportCallback;
 #endif
@@ -102,6 +102,8 @@ private:
 	void setQueues();
 	void createLogicalDevice();
 public:
+	VkSurfaceKHR surface;
+	VkInstance instance;
 	VulkanRenderer(VkAllocationCallbacks* allocator = nullptr);
 	~VulkanRenderer();
 };

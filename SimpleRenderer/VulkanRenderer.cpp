@@ -1,7 +1,7 @@
 #include "VulkanRenderer.h"
 #include <iostream>
 
-VulkanRenderer::VulkanRenderer(VkAllocationCallbacks* allocator)
+VulkanRenderer::VulkanRenderer(VkAllocationCallbacks* allocator) : surface(VK_NULL_HANDLE)
 {
 	this->allocator = allocator;
 	initInstance();
@@ -24,6 +24,10 @@ VulkanRenderer::VulkanRenderer(VkAllocationCallbacks* allocator)
 }
 
 VulkanRenderer::~VulkanRenderer() {
+	if (surface != VK_NULL_HANDLE)
+	{
+		vkDestroySurfaceKHR(instance, surface, nullptr);
+	}
 	//destroying logical device 
 	vkDeviceWaitIdle(logical_device);
 	vkDestroyDevice(logical_device, allocator);
@@ -159,6 +163,15 @@ void VulkanRenderer::setQueues() {
 		throw RendererException("zero queues detected");
 	queueFamilyProperties.resize(queueFamilyPropertyCount);
 	vkGetPhysicalDeviceQueueFamilyProperties(physicalDevices[number_of_selected_device], &queueFamilyPropertyCount, queueFamilyProperties.data());
+	for (uint32_t i = 0; i < queueFamilyProperties.size(); i++)
+	{
+		if (queueFamilyProperties[i].queueFlags & VK_QUEUE_GRAPHICS_BIT)
+		{
+			graphics_famaly_index = i;
+			return;
+		}
+	}
+	throw RendererException("no graphics-enabled queues detected");
 }
 
 void VulkanRenderer::createLogicalDevice() {
@@ -169,7 +182,7 @@ void VulkanRenderer::createLogicalDevice() {
 		VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO, //sType
 		nullptr,                                    //pNext
 		0,                                          //flags
-		0,                                          //queueFamilyIndex
+		graphics_famaly_index,                      //queueFamilyIndex
 		1,                                          //queueCount
 		priorities.data()                           //pQueuePriorities
 	};
