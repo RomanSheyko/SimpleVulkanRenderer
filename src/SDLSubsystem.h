@@ -5,18 +5,21 @@
 #include <SDL2/SDL_vulkan.h>
 #include <vulkan/vulkan.h>
 #include "WindowSubsystemException.h"
+#include "VulkanRenderer.h"
 
 class SDLSubsystem :
     public WindowSubsystem
 {
 public:
-    SDLSubsystem();
-    void createWindow(const char* window_name, size_t width, size_t height) override;
+    SDLSubsystem(const char* window_name, size_t width, size_t height);
     void mainLoop() override;
     ~SDLSubsystem() override;
-    void createSurface(VkSurfaceKHR* surface, VkInstance instance) override;
 private:
     SDL_Window* window;
+    std::unique_ptr<VulkanRenderer> renderer;
+    std::vector<const char*> requiredInstanceExtentions;
+    void createSurface() override;
+    void createWindow(const char* window_name, size_t width, size_t height) override;
 };
 
 #endif

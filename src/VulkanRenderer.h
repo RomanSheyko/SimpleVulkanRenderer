@@ -2,7 +2,7 @@
 #define VULKAN_RENDERER_H
 #include "RendererException.h"
 
-#define DEBUG_APPLICATION
+//#define DEBUG_APPLICATION
 
 #ifdef _WIN32
 //using windows
@@ -95,7 +95,7 @@ private:
 	VkPhysicalDeviceProperties selectedDeviceProperties;
 	VkPhysicalDeviceMemoryProperties selectedDeviceMemoryProperties;
 	
-	void initInstance();
+	void initInstance(std::vector<const char*>& requiredInstanceExtentions);
 	void setPhysicalDevice(uint32_t selected_device_num, uint32_t physicalDevicesCount);
 	void selectPhysicalDevice();
 	void checkFeatures();
@@ -104,7 +104,7 @@ private:
 public:
 	VkSurfaceKHR surface;
 	VkInstance instance;
-	VulkanRenderer(VkAllocationCallbacks* allocator = nullptr);
+	VulkanRenderer(std::vector<const char*>& requiredInstanceExtentions, VkAllocationCallbacks* allocator = nullptr);
 	~VulkanRenderer();
 };
 

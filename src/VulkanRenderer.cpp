@@ -1,10 +1,10 @@
 #include "VulkanRenderer.h"
 #include <iostream>
 
-VulkanRenderer::VulkanRenderer(VkAllocationCallbacks* allocator) : surface(VK_NULL_HANDLE)
+VulkanRenderer::VulkanRenderer(std::vector<const char*>& requiredInstanceExtentions, VkAllocationCallbacks* allocator) : surface(VK_NULL_HANDLE)
 {
 	this->allocator = allocator;
-	initInstance();
+	initInstance(requiredInstanceExtentions);
 #ifdef DEBUG_APPLICATION
 	VkDebugReportCallbackCreateInfoEXT debugReportCallbackcreateInfo = {};
 	debugReportCallbackcreateInfo.sType = VK_STRUCTURE_TYPE_DEBUG_REPORT_CALLBACK_CREATE_INFO_EXT;
@@ -35,7 +35,7 @@ VulkanRenderer::~VulkanRenderer() {
 	vkDestroyInstance(instance, allocator);
 }
 
-void VulkanRenderer::initInstance() {
+void VulkanRenderer::initInstance(std::vector<const char*>& requiredInstanceExtentions) {
 	VkInstanceCreateInfo info = {};
 	VkApplicationInfo app_info = {};
 
@@ -43,10 +43,10 @@ void VulkanRenderer::initInstance() {
 	requiredDeviceFeatures = {};
 	requiredDeviceFeatures.multiDrawIndirect = VK_TRUE;
 	requiredDeviceFeatures.tessellationShader = VK_TRUE;
-	requiredDeviceFeatures.geometryShader = VK_TRUE;
+	//requiredDeviceFeatures.geometryShader = VK_TRUE;
 	/*------------------------------------------------------------------------*/
 
-	std::vector<const char*> requiredInstanceExtentions = { RQUIRED_INSTANCE_EXTENTIONS };
+	//std::vector<const char*> requiredInstanceExtentions = { RQUIRED_INSTANCE_EXTENTIONS };
 
 	//filling out application info
 	app_info.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO;

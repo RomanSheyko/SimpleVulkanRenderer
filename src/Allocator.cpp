@@ -7,7 +7,8 @@ void* Allocator::allocation(
 	VkSystemAllocationScope allocationScope)
 {
 	//TODO: write allocation
-	return _aligned_malloc(size, alignment);
+	//return _aligned_malloc(size, alignment);
+    return nullptr;
 }
 
 void* Allocator::reallocation(
@@ -17,13 +18,14 @@ void* Allocator::reallocation(
 	VkSystemAllocationScope allocationScope)
 {
 	//TODO: write reallocation
-	return _aligned_realloc(pOriginal, size, alignment);
+	//return _aligned_realloc(pOriginal, size, alignment);
+    return nullptr;
 }
 
 void Allocator::free(void* pMemory)
 {
 	//TODO: write memory free
-	_aligned_free(pMemory);
+	//_aligned_free(pMemory);
 }
 
 void* VKAPI_CALL Allocator::Allocation(
