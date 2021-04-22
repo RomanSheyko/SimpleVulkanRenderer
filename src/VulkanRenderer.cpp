@@ -1,8 +1,19 @@
 #include "VulkanRenderer.h"
 #include <iostream>
+#include <array>
 
-VulkanRenderer::VulkanRenderer(std::vector<const char*>& requiredInstanceExtentions, VkAllocationCallbacks* allocator) : surface(VK_NULL_HANDLE)
+VulkanRenderer::VulkanRenderer(std::vector<const char*>& requiredInstanceExtentions, VkAllocationCallbacks* allocator) :
+surface(VK_NULL_HANDLE),
+gpu(VK_NULL_HANDLE),
+swapchain(VK_NULL_HANDLE),
+depth_stecil_image(VK_NULL_HANDLE),
+depth_stecil_image_view(VK_NULL_HANDLE),
+depth_stencil_format(VK_FORMAT_UNDEFINED),
+stencil_available(false),
+depth_stencil_image_memory(VK_NULL_HANDLE),
+render_pass(VK_NULL_HANDLE)
 {
+    swapchain_image_count = SWAPCHAIN_BUFFER_COUNT;
 	this->allocator = allocator;
 	initInstance(requiredInstanceExtentions);
 #ifdef DEBUG_APPLICATION
@@ -14,7 +25,7 @@ VulkanRenderer::VulkanRenderer(std::vector<const char*>& requiredInstanceExtenti
 	PFN_vkCreateDebugReportCallbackEXT vkCreateDebugReportCallbackEXT =
 		(PFN_vkCreateDebugReportCallbackEXT)vkGetInstanceProcAddr(instance, "vkCreateDebugReportCallbackEXT");
 
-	if (vkCreateDebugReportCallbackEXT(instance, &debugReportCallbackcreateInfo, nullptr, &(this->reportCallback)) != VK_SUCCESS) {
+	if (vkCreateDebugReportCallbackEXT(instance, &debugReportCallbackcreateInfo, allocator, &(this->reportCallback)) != VK_SUCCESS) {
 		throw RendererException("\"vkCreateDebugReportCallbackEXT\" error");
 	}
 	std::cout << "Vulkan: report callback is set " << std::endl;
@@ -24,13 +35,49 @@ VulkanRenderer::VulkanRenderer(std::vector<const char*>& requiredInstanceExtenti
 }
 
 VulkanRenderer::~VulkanRenderer() {
+    for(auto& el : framebuffers)
+    {
+        vkDestroyFramebuffer(logical_device, el, allocator);
+    }
+    
+    if(render_pass != VK_NULL_HANDLE)
+    {
+        vkDestroyRenderPass(logical_device, render_pass, allocator);
+    }
+    
+    if(depth_stecil_image_view != VK_NULL_HANDLE)
+    {
+        vkDestroyImageView(logical_device, depth_stecil_image_view, allocator);
+    }
+    
+    vkFreeMemory(logical_device, depth_stencil_image_memory, allocator);
+    
+    if(depth_stecil_image != VK_NULL_HANDLE)
+    {
+        vkDestroyImage(logical_device, depth_stecil_image, allocator);
+    }
+    
+    for(auto& el : swapchain_image_views)
+    {
+        vkDestroyImageView(logical_device, el, allocator); 
+    }
+    
+    if(swapchain != VK_NULL_HANDLE)
+    {
+        vkDestroySwapchainKHR(logical_device, swapchain, allocator);
+    }
 	if (surface != VK_NULL_HANDLE)
 	{
-		vkDestroySurfaceKHR(instance, surface, nullptr);
+		vkDestroySurfaceKHR(instance, surface, allocator);
 	}
 	//destroying logical device 
 	vkDeviceWaitIdle(logical_device);
 	vkDestroyDevice(logical_device, allocator);
+#ifdef DEBUG_APPLICATION
+    PFN_vkDestroyDebugReportCallbackEXT vkDestroyDebugReportCallbackEXT =
+        (PFN_vkDestroyDebugReportCallbackEXT)vkGetInstanceProcAddr(instance, "vkDestroyDebugReportCallbackEXT");
+    vkDestroyDebugReportCallbackEXT(instance, this->reportCallback, allocator);
+#endif
 	//destroying instance
 	vkDestroyInstance(instance, allocator);
 }
@@ -140,6 +187,7 @@ void VulkanRenderer::setPhysicalDevice(uint32_t selected_device_num, uint32_t ph
 		setQueues();
 	}
 	else throw RendererException("\"vkEnumeratePhysicalDevices\" error");
+    gpu = physicalDevices[selected_device_num];
 }
 
 void VulkanRenderer::checkFeatures() {
@@ -183,7 +231,7 @@ void VulkanRenderer::createLogicalDevice() {
 		nullptr,                                    //pNext
 		0,                                          //flags
 		graphics_famaly_index,                      //queueFamilyIndex
-		1,                                          //queueCount
+		QUEUE_COUNT,                                //queueCount
 		priorities.data()                           //pQueuePriorities
 	};
 	std::vector<const char*> requiredDeviceExtensions = { REQUIRED_DEVICE_EXTENTIONS };
@@ -252,6 +300,278 @@ void VulkanRenderer::createLogicalDevice() {
 		throw RendererException("unable to create logical device");
 	}
 }
+
+void VulkanRenderer::getSurfaceCapabilities()
+{
+    VkBool32 WSI_supported = false;
+    vkGetPhysicalDeviceSurfaceSupportKHR(gpu,  graphics_famaly_index, surface, &WSI_supported);
+    if(!WSI_supported) throw RendererException("WSI not supported");
+    
+    vkGetPhysicalDeviceSurfaceCapabilitiesKHR(gpu, surface, &surface_capabilities);
+    if(surface_capabilities.currentExtent.width < UINT32_MAX)
+    {
+        surface_size_x = surface_capabilities.currentExtent.width;
+    }
+    
+    if(surface_capabilities.currentExtent.height < UINT32_MAX)
+    {
+        surface_size_y = surface_capabilities.currentExtent.height;
+    }
+    
+    uint32_t format_count = 0;
+    
+    vkGetPhysicalDeviceSurfaceFormatsKHR(gpu, surface, & format_count, nullptr);
+    
+    if(format_count < 1) throw RendererException("surface formats missing");
+    
+    std::vector<VkSurfaceFormatKHR> formats(format_count);
+    
+    vkGetPhysicalDeviceSurfaceFormatsKHR(gpu, surface, & format_count, formats.data());
+    
+    if(formats[0].format == VK_FORMAT_UNDEFINED)
+    {
+        surface_format.format = VK_FORMAT_B8G8R8_UNORM;
+        surface_format.colorSpace = VK_COLOR_SPACE_SRGB_NONLINEAR_KHR;
+    }
+    else {
+        surface_format = formats[0];
+    }
+}
+
+void VulkanRenderer::createSwapchain() {
+    VkPresentModeKHR present_mode = VK_PRESENT_MODE_FIFO_KHR;
+    
+    uint32_t present_mode_count;
+    vkGetPhysicalDeviceSurfacePresentModesKHR(gpu, surface, &present_mode_count, nullptr);
+    std::vector<VkPresentModeKHR> present_modes(present_mode_count);
+    vkGetPhysicalDeviceSurfacePresentModesKHR(gpu, surface, &present_mode_count, present_modes.data());
+    for(auto& el : present_modes)
+    {
+        if(el == VK_PRESENT_MODE_MAILBOX_KHR) present_mode = el;
+    }
+    
+    VkSwapchainCreateInfoKHR swapchain_create_info {};
+    swapchain_create_info.sType                  = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR;
+    swapchain_create_info.surface                = surface;
+    swapchain_create_info.minImageCount          = SWAPCHAIN_BUFFER_COUNT;
+    swapchain_create_info.imageFormat            = surface_format.format;
+    swapchain_create_info.imageColorSpace        = surface_format.colorSpace;
+    swapchain_create_info.imageExtent.width      = surface_size_x;
+    swapchain_create_info.imageExtent.height     = surface_size_y;
+    swapchain_create_info.imageArrayLayers       = 1;
+    swapchain_create_info.imageUsage             = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
+    swapchain_create_info.imageSharingMode       = VK_SHARING_MODE_EXCLUSIVE;
+    swapchain_create_info.queueFamilyIndexCount  = 0;
+    swapchain_create_info.pQueueFamilyIndices    = nullptr;
+    swapchain_create_info.preTransform           = VK_SURFACE_TRANSFORM_IDENTITY_BIT_KHR;
+    swapchain_create_info.compositeAlpha         = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;
+    swapchain_create_info.presentMode            = present_mode;
+    swapchain_create_info.clipped                = VK_TRUE;
+    swapchain_create_info.oldSwapchain           = nullptr;
+    
+    vkCreateSwapchainKHR(logical_device, &swapchain_create_info, allocator, &swapchain);
+    
+    vkGetSwapchainImagesKHR(logical_device, swapchain, &swapchain_image_count, nullptr);
+}
+
+void VulkanRenderer::createSwapchainImages() { 
+    swapchain_images.resize(swapchain_image_count);
+    swapchain_image_views.resize(swapchain_image_count);
+    
+    vkGetSwapchainImagesKHR(logical_device, swapchain, &swapchain_image_count, swapchain_images.data());
+    
+    for(uint32_t i = 0; i < swapchain_image_count; i++)
+    {
+        VkImageViewCreateInfo image_view_create_info {};
+        image_view_create_info.sType                           = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
+        image_view_create_info.image                           = swapchain_images[i];
+        image_view_create_info.viewType                        = VK_IMAGE_VIEW_TYPE_2D;
+        image_view_create_info.format                          = surface_format.format;
+        image_view_create_info.components.r                    = VK_COMPONENT_SWIZZLE_IDENTITY;
+        image_view_create_info.components.g                    = VK_COMPONENT_SWIZZLE_IDENTITY;
+        image_view_create_info.components.b                    = VK_COMPONENT_SWIZZLE_IDENTITY;
+        image_view_create_info.components.a                    = VK_COMPONENT_SWIZZLE_IDENTITY;
+        image_view_create_info.subresourceRange.aspectMask     = VK_IMAGE_ASPECT_COLOR_BIT;
+        image_view_create_info.subresourceRange.baseMipLevel   = 0;
+        image_view_create_info.subresourceRange.levelCount     = 1;
+        image_view_create_info.subresourceRange.baseArrayLayer = 0;
+        image_view_create_info.subresourceRange.layerCount     = 1;
+        
+        vkCreateImageView(logical_device, &image_view_create_info, allocator, &swapchain_image_views[i]);
+    }
+}
+
+void VulkanRenderer::createDepthStecilImage()
+{
+    std::vector<VkFormat> try_formats {VK_FORMAT_D32_SFLOAT_S8_UINT, VK_FORMAT_D24_UNORM_S8_UINT, VK_FORMAT_D16_UNORM_S8_UINT, VK_FORMAT_D32_SFLOAT, VK_FORMAT_D16_UNORM};
+    
+    for(auto& el : try_formats)
+    {
+        VkFormatProperties format_properties{};
+        vkGetPhysicalDeviceFormatProperties(gpu, el, &format_properties);
+        
+        if (format_properties.optimalTilingFeatures & VK_FORMAT_FEATURE_DEPTH_STENCIL_ATTACHMENT_BIT)
+        {
+            depth_stencil_format = el;
+            break;
+        }
+    }
+    
+    if(depth_stencil_format == VK_FORMAT_UNDEFINED)
+    {
+        throw RendererException("Depth stecil format not selected");
+    }
+    
+    if((depth_stencil_format == VK_FORMAT_D32_SFLOAT_S8_UINT) ||
+       (depth_stencil_format == VK_FORMAT_D24_UNORM_S8_UINT) ||
+       (depth_stencil_format == VK_FORMAT_D16_UNORM_S8_UINT) ||
+       (depth_stencil_format == VK_FORMAT_D32_SFLOAT) ||
+       (depth_stencil_format == VK_FORMAT_D16_UNORM))
+    {
+        stencil_available = true;
+    }
+    
+    VkImageCreateInfo image_create_info {};
+    image_create_info.sType                 = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
+    image_create_info.flags                 = 0;
+    image_create_info.imageType             = VK_IMAGE_TYPE_2D;
+    image_create_info.format                = depth_stencil_format;
+    image_create_info.extent.width          = surface_size_x;
+    image_create_info.extent.height         = surface_size_y;
+    image_create_info.extent.depth          = 1;
+    image_create_info.mipLevels             = 1;
+    image_create_info.arrayLayers           = 1;
+    image_create_info.samples               = VK_SAMPLE_COUNT_1_BIT;
+    image_create_info.tiling                = VK_IMAGE_TILING_OPTIMAL;
+    image_create_info.usage                 = VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT;
+    image_create_info.sharingMode           = VK_SHARING_MODE_EXCLUSIVE;
+    image_create_info.queueFamilyIndexCount = VK_QUEUE_FAMILY_IGNORED;
+    image_create_info.pQueueFamilyIndices   = nullptr;
+    image_create_info.initialLayout         = VK_IMAGE_LAYOUT_UNDEFINED;
+    
+    vkCreateImage(logical_device, &image_create_info, allocator, &depth_stecil_image);
+    
+    VkMemoryRequirements image_memory_requirements {};
+    vkGetImageMemoryRequirements(logical_device, depth_stecil_image, &image_memory_requirements);
+    auto required_property = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
+    
+    uint32_t memory_index = UINT32_MAX;
+    for(uint32_t i = 0; i < selectedDeviceMemoryProperties.memoryTypeCount; i++)
+    {
+        if(image_memory_requirements.memoryTypeBits & (1 << i))
+        {
+            if((selectedDeviceMemoryProperties.memoryTypes[i].propertyFlags & required_property) == required_property)
+            {
+                memory_index = i;
+                break;
+            }
+        }
+    }
+    
+    if(memory_index == UINT32_MAX) throw RendererException("memory index not selected");
+    
+    VkMemoryAllocateInfo memory_allocate_info {};
+    memory_allocate_info.sType           = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+    memory_allocate_info.allocationSize  = image_memory_requirements.size;
+    memory_allocate_info.memoryTypeIndex = memory_index;
+    
+    vkAllocateMemory(logical_device, &memory_allocate_info, allocator, &depth_stencil_image_memory);
+    vkBindImageMemory(logical_device, depth_stecil_image, depth_stencil_image_memory, 0);
+    
+    VkImageViewCreateInfo image_view_create_info {};
+    image_view_create_info.sType                           = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
+    image_view_create_info.image                           = depth_stecil_image;
+    image_view_create_info.viewType                        = VK_IMAGE_VIEW_TYPE_2D;
+    image_view_create_info.format                          = depth_stencil_format;
+    image_view_create_info.components.r                    = VK_COMPONENT_SWIZZLE_IDENTITY;
+    image_view_create_info.components.g                    = VK_COMPONENT_SWIZZLE_IDENTITY;
+    image_view_create_info.components.b                    = VK_COMPONENT_SWIZZLE_IDENTITY;
+    image_view_create_info.components.a                    = VK_COMPONENT_SWIZZLE_IDENTITY;
+    image_view_create_info.subresourceRange.aspectMask     = VK_IMAGE_ASPECT_DEPTH_BIT | (stencil_available ? VK_IMAGE_ASPECT_STENCIL_BIT : 0);
+    image_view_create_info.subresourceRange.baseMipLevel   = 0;
+    image_view_create_info.subresourceRange.levelCount     = 1;
+    image_view_create_info.subresourceRange.baseArrayLayer = 0;
+    image_view_create_info.subresourceRange.layerCount     = 1;
+    
+    vkCreateImageView(logical_device, &image_view_create_info, allocator, &depth_stecil_image_view);
+}
+
+const VkPhysicalDeviceMemoryProperties& VulkanRenderer::getVulkanPhysicalDeviceMemoryProperties() const
+{
+    return selectedDeviceMemoryProperties;
+}
+
+void VulkanRenderer::createRenderPass()
+{
+    std::array<VkAttachmentDescription, 2> attachments {};
+    attachments[0].flags          = 0;
+    attachments[0].format         = depth_stencil_format;
+    attachments[0].samples        = VK_SAMPLE_COUNT_1_BIT;
+    attachments[0].loadOp         = VK_ATTACHMENT_LOAD_OP_CLEAR;
+    attachments[0].storeOp        = VK_ATTACHMENT_STORE_OP_DONT_CARE;
+    attachments[0].stencilLoadOp  = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+    attachments[0].stencilStoreOp = VK_ATTACHMENT_STORE_OP_STORE;
+    attachments[0].initialLayout  = VK_IMAGE_LAYOUT_UNDEFINED;
+    attachments[0].finalLayout    = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
+    
+    attachments[1].flags          = 0;
+    attachments[1].format         = surface_format.format;
+    attachments[1].samples        = VK_SAMPLE_COUNT_1_BIT;
+    attachments[1].loadOp         = VK_ATTACHMENT_LOAD_OP_CLEAR;
+    attachments[1].storeOp        = VK_ATTACHMENT_STORE_OP_STORE;
+    attachments[1].initialLayout  = VK_IMAGE_LAYOUT_UNDEFINED;
+    attachments[1].finalLayout    = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
+    
+    VkAttachmentReference subpass_0_depth_stencil_attachment {};
+    subpass_0_depth_stencil_attachment.attachment = 0;
+    subpass_0_depth_stencil_attachment.layout     = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
+    
+    std::array<VkAttachmentReference, 1> subpass_0_color_attachments {};
+    subpass_0_color_attachments[0].attachment = 1;
+    subpass_0_color_attachments[0].layout     = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+    
+    std::array<VkSubpassDescription, 1> subpasses {};
+    subpasses[0].pipelineBindPoint       = VK_PIPELINE_BIND_POINT_GRAPHICS;
+    subpasses[0].inputAttachmentCount    = 0;
+    subpasses[0].pInputAttachments       = nullptr;
+    subpasses[0].colorAttachmentCount    = subpass_0_color_attachments.size();
+    subpasses[0].pColorAttachments       = subpass_0_color_attachments.data();
+    subpasses[0].pDepthStencilAttachment = &subpass_0_depth_stencil_attachment;
+    
+    VkRenderPassCreateInfo render_pass_create_info {};
+    render_pass_create_info.sType           = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
+    render_pass_create_info.attachmentCount = attachments.size();
+    render_pass_create_info.pAttachments    = attachments.data();
+    render_pass_create_info.subpassCount    = subpasses.size();
+    render_pass_create_info.pSubpasses      = subpasses.data();
+    render_pass_create_info.dependencyCount = 0;
+    render_pass_create_info.pDependencies   = nullptr;
+    vkCreateRenderPass(logical_device, &render_pass_create_info, allocator, &render_pass);
+}
+
+void VulkanRenderer::createFramebuffers()
+{
+    framebuffers.resize(swapchain_image_count);
+    for(uint32_t i = 0; i < swapchain_image_count; i++)
+    {
+        std::array<VkImageView, 2> attachments {};
+        attachments[0] = depth_stecil_image_view;
+        attachments[1] = swapchain_image_views[i];
+        
+        VkFramebufferCreateInfo framebuffer_create_info {};
+        framebuffer_create_info.sType           = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
+        framebuffer_create_info.renderPass      = render_pass;
+        framebuffer_create_info.attachmentCount = attachments.size();
+        framebuffer_create_info.pAttachments    = attachments.data();
+        framebuffer_create_info.width           = surface_size_x;
+        framebuffer_create_info.height          = surface_size_y;
+        framebuffer_create_info.layers          = 1;
+        
+        vkCreateFramebuffer(logical_device, &framebuffer_create_info, allocator, &framebuffers[i]);
+    }
+}
+
+
 
 VKAPI_ATTR VkBool32 VKAPI_CALL vulkanDebugCallback(
 	VkDebugReportFlagsEXT flags,

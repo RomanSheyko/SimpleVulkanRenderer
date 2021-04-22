@@ -10,7 +10,7 @@
 
 int main(int argc, char* argv[]) {
 	try {
-		SDLSubsystem windowSubsystem("Test", 640, 480);
+		SDLSubsystem windowSubsystem("Test", 1440, 960);
 		windowSubsystem.mainLoop();
 	}
 	catch (RendererException & e) {

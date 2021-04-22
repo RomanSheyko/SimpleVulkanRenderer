@@ -1,5 +1,7 @@
 #include "SDLSubsystem.h"
 #include <stdint.h>
+#include <chrono>
+#include <thread>
 
 SDLSubsystem::SDLSubsystem(const char* window_name, size_t width, size_t height)
 {
@@ -43,7 +45,7 @@ SDLSubsystem::SDLSubsystem(const char* window_name, size_t width, size_t height)
 
 void SDLSubsystem::createWindow(const char* window_name, size_t width, size_t height)
 {
-	window = SDL_CreateWindow(window_name, SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, (int)width, (int)width, SDL_WINDOW_SHOWN | SDL_WINDOW_VULKAN);
+	window = SDL_CreateWindow(window_name, SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, (int)width, (int)height, SDL_WINDOW_SHOWN | SDL_WINDOW_VULKAN);
 	if (window == nullptr)
 	{
 		throw WindowSubsystemException("Error creating a window");
@@ -52,10 +54,16 @@ void SDLSubsystem::createWindow(const char* window_name, size_t width, size_t he
 
 void SDLSubsystem::createSurface()
 {
-	if (!SDL_Vulkan_CreateSurface(window, renderer->instance, &renderer->surface))
+	if (!SDL_Vulkan_CreateSurface(window, renderer->getInstance(), &renderer->getSurface()))
 	{
 		throw WindowSubsystemException("Error creating a surface");
 	}
+    renderer->getSurfaceCapabilities();
+    renderer->createSwapchain();
+    renderer->createSwapchainImages();
+    renderer->createDepthStecilImage();
+    renderer->createRenderPass();
+    renderer->createFramebuffers();
 }
 
 void SDLSubsystem::mainLoop()
@@ -69,7 +77,7 @@ void SDLSubsystem::mainLoop()
 				exit = true;
 			}
 		}
-
+        //std::this_thread::sleep_for(std::chrono::seconds(1));
 	}
 }
 

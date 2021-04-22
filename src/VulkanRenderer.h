@@ -2,7 +2,7 @@
 #define VULKAN_RENDERER_H
 #include "RendererException.h"
 
-//#define DEBUG_APPLICATION
+#define DEBUG_APPLICATION
 
 #ifdef _WIN32
 //using windows
@@ -51,7 +51,7 @@
 /*--------------------Required instance validation layers section------------------*/
 #ifdef DEBUG_APPLICATION
 #define REQUIRED_INSTANCE_VALIDATION_LAYERS\
- "VK_LAYER_LUNARG_standard_validation"
+ "VK_LAYER_KHRONOS_validation"
 #else
 #define REQUIRED_INSTANCE_VALIDATION_LAYERS
 #endif
@@ -76,34 +76,85 @@ VKAPI_ATTR VkBool32 VKAPI_CALL vulkanDebugCallback(
 	const char* msg,
 	void* userData);
 #endif
+
+#define SWAPCHAIN_BUFFER_COUNT 2
+#define QUEUE_COUNT 1
+
 #include "Allocator.h"
 
 class VulkanRenderer
 {
 private:
+    VkSurfaceKHR surface;
+    VkInstance instance;
 	VkDevice logical_device;
 	uint32_t number_of_selected_device;
 	uint32_t queueFamilyPropertyCount;
 	VkAllocationCallbacks* allocator;
 	uint32_t graphics_famaly_index;
+    VkSwapchainKHR swapchain;
+    uint32_t swapchain_image_count;
+    
+    std::vector<VkImage> swapchain_images;
+    std::vector<VkImageView> swapchain_image_views;
+    
 #ifdef DEBUG_APPLICATION
 	VkDebugReportCallbackEXT reportCallback;
 #endif
 	VkPhysicalDeviceFeatures requiredDeviceFeatures;
 	std::vector<VkPhysicalDevice> physicalDevices;
+    VkPhysicalDevice gpu;
 	std::vector<VkQueueFamilyProperties> queueFamilyProperties;
 	VkPhysicalDeviceProperties selectedDeviceProperties;
 	VkPhysicalDeviceMemoryProperties selectedDeviceMemoryProperties;
+    
+    VkSurfaceFormatKHR surface_format;
 	
 	void initInstance(std::vector<const char*>& requiredInstanceExtentions);
 	void setPhysicalDevice(uint32_t selected_device_num, uint32_t physicalDevicesCount);
 	void selectPhysicalDevice();
 	void checkFeatures();
 	void setQueues();
-	void createLogicalDevice();
+    void createLogicalDevice();
+    VkSurfaceCapabilitiesKHR surface_capabilities;
+    uint32_t surface_size_x;
+    uint32_t surface_size_y;
+    VkImage depth_stecil_image;
+    VkImageView depth_stecil_image_view;
+    VkFormat depth_stencil_format;
+    bool stencil_available;
+    VkRenderPass render_pass;
+    VkDeviceMemory depth_stencil_image_memory;
+    std::vector<VkFramebuffer> framebuffers;
 public:
-	VkSurfaceKHR surface;
-	VkInstance instance;
+    const VkDevice& getDevice() const
+    {
+        return logical_device;
+    }
+    
+    VkInstance& getInstance()
+    {
+        return instance;
+    }
+    
+    VkSurfaceKHR& getSurface()
+    {
+        return surface;
+    }
+    
+    uint32_t getGraphicsFamalyIndex()
+    {
+        return graphics_famaly_index;
+    }
+    
+    void getSurfaceCapabilities();
+    void createSwapchain();
+    void createSwapchainImages();
+    void createDepthStecilImage();
+    void createRenderPass();
+    void createFramebuffers();
+    const VkPhysicalDeviceMemoryProperties& getVulkanPhysicalDeviceMemoryProperties() const;
+    
 	VulkanRenderer(std::vector<const char*>& requiredInstanceExtentions, VkAllocationCallbacks* allocator = nullptr);
 	~VulkanRenderer();
 };
