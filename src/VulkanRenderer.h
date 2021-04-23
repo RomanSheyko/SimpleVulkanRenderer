@@ -126,6 +126,10 @@ private:
     VkRenderPass render_pass;
     VkDeviceMemory depth_stencil_image_memory;
     std::vector<VkFramebuffer> framebuffers;
+    
+    uint32_t active_swapchain_image_id;
+    VkFence swapchain_image_available;
+    VkQueue queue;
 public:
     const VkDevice& getDevice() const
     {
@@ -147,13 +151,47 @@ public:
         return graphics_famaly_index;
     }
     
+    VkDevice getDevice()
+    {
+        return logical_device;
+    }
+    
+    VkAllocationCallbacks* getAllocator()
+    {
+        return allocator;
+    }
+    
+    VkRenderPass getRenderPass()
+    {
+        return render_pass;
+    }
+    
+    VkFramebuffer getActiveFaramebuffer()
+    {
+        return framebuffers[active_swapchain_image_id];
+    }
+    
+    VkExtent2D getSurfaceSize()
+    {
+        return {surface_size_x, surface_size_y};
+    }
+    
+    VkQueue getQueue()
+    {
+        return queue;
+    }
+    
     void getSurfaceCapabilities();
     void createSwapchain();
     void createSwapchainImages();
     void createDepthStecilImage();
     void createRenderPass();
     void createFramebuffers();
+    void createSync();
     const VkPhysicalDeviceMemoryProperties& getVulkanPhysicalDeviceMemoryProperties() const;
+    
+    void beginRender();
+    void endRender(std::vector<VkSemaphore>& semapthores_to_wait);
     
 	VulkanRenderer(std::vector<const char*>& requiredInstanceExtentions, VkAllocationCallbacks* allocator = nullptr);
 	~VulkanRenderer();

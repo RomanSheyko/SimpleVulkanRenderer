@@ -11,7 +11,9 @@ depth_stecil_image_view(VK_NULL_HANDLE),
 depth_stencil_format(VK_FORMAT_UNDEFINED),
 stencil_available(false),
 depth_stencil_image_memory(VK_NULL_HANDLE),
-render_pass(VK_NULL_HANDLE)
+render_pass(VK_NULL_HANDLE),
+active_swapchain_image_id(UINT32_MAX),
+swapchain_image_available(VK_NULL_HANDLE)
 {
     swapchain_image_count = SWAPCHAIN_BUFFER_COUNT;
 	this->allocator = allocator;
@@ -35,6 +37,12 @@ render_pass(VK_NULL_HANDLE)
 }
 
 VulkanRenderer::~VulkanRenderer() {
+    vkQueueWaitIdle(queue);
+    if(swapchain_image_available != VK_NULL_HANDLE)
+    {
+        vkDestroyFence(logical_device, swapchain_image_available, allocator);
+    }
+    
     for(auto& el : framebuffers)
     {
         vkDestroyFramebuffer(logical_device, el, allocator);
@@ -299,6 +307,7 @@ void VulkanRenderer::createLogicalDevice() {
 	if (vkCreateDevice(physicalDevices[number_of_selected_device], &deviceCreateInfo, allocator, &logical_device) != VK_SUCCESS) {
 		throw RendererException("unable to create logical device");
 	}
+    vkGetDeviceQueue(logical_device, graphics_famaly_index, 0, &queue);
 }
 
 void VulkanRenderer::getSurfaceCapabilities()
@@ -571,7 +580,36 @@ void VulkanRenderer::createFramebuffers()
     }
 }
 
+void VulkanRenderer::beginRender() { 
+    vkAcquireNextImageKHR(logical_device, swapchain, UINT64_MAX, VK_NULL_HANDLE, swapchain_image_available, &active_swapchain_image_id);
+    vkWaitForFences(logical_device, 1, &swapchain_image_available, VK_TRUE, UINT64_MAX);
+    vkResetFences(logical_device, 1, &swapchain_image_available);
+    vkQueueWaitIdle(queue);
+    
+}
 
+
+void VulkanRenderer::endRender(std::vector<VkSemaphore>& semapthores_to_wait) {
+    VkResult present_result = VkResult::VK_RESULT_MAX_ENUM;
+    
+    VkPresentInfoKHR present_info {};
+    present_info.sType              = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
+    present_info.waitSemaphoreCount = semapthores_to_wait.size();
+    present_info.pWaitSemaphores    = semapthores_to_wait.data();
+    present_info.swapchainCount     = 1;
+    present_info.pSwapchains        = &swapchain;
+    present_info.pImageIndices      = &active_swapchain_image_id;
+    present_info.pResults           = &present_result;
+    
+    
+    vkQueuePresentKHR(queue, &present_info);
+}
+
+void VulkanRenderer::createSync() {
+    VkFenceCreateInfo fence_create_info {};
+    fence_create_info.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
+    vkCreateFence(logical_device, &fence_create_info, allocator, &swapchain_image_available);
+}
 
 VKAPI_ATTR VkBool32 VKAPI_CALL vulkanDebugCallback(
 	VkDebugReportFlagsEXT flags,
