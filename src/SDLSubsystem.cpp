@@ -56,17 +56,11 @@ void SDLSubsystem::createWindow(const char* window_name, size_t width, size_t he
 
 void SDLSubsystem::createSurface()
 {
-	if (!SDL_Vulkan_CreateSurface(window, renderer->getInstance(), &renderer->getSurface()))
+	if (!SDL_Vulkan_CreateSurface(window, renderer->getInstance(), &renderer->getSurface().surface))
 	{
 		throw WindowSubsystemException("Error creating a surface");
 	}
-    renderer->getSurfaceCapabilities();
-    renderer->createSwapchain();
-    renderer->createSwapchainImages();
-    renderer->createDepthStecilImage();
-    renderer->createRenderPass();
-    renderer->createFramebuffers();
-    renderer->createSync();
+    renderer->init();
 }
 
 void SDLSubsystem::mainLoop()
@@ -77,7 +71,7 @@ void SDLSubsystem::mainLoop()
     VkCommandPoolCreateInfo command_pool_create_info {};
     command_pool_create_info.sType            = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
     command_pool_create_info.flags            = VK_COMMAND_POOL_CREATE_TRANSIENT_BIT | VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
-    command_pool_create_info.queueFamilyIndex = renderer->getGraphicsFamalyIndex();
+    command_pool_create_info.queueFamilyIndex = renderer->getQueue().graphics_famaly_index;
     
     vkCreateCommandPool(renderer->getDevice(), &command_pool_create_info, renderer->getAllocator(), &command_pool);
     
@@ -117,14 +111,12 @@ void SDLSubsystem::mainLoop()
             frame_counter = 0;
             std::cout << "FPS: " << fps << std::endl;
         }
-        
-        //std::this_thread::sleep_for(std::chrono::seconds(1));
         renderer->beginRender();
         
         VkCommandBufferBeginInfo command_buffer_begin_info {};
         command_buffer_begin_info.sType            = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
         command_buffer_begin_info.flags            = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
-        command_buffer_begin_info.pInheritanceInfo = nullptr;
+        //command_buffer_begin_info.pInheritanceInfo = nullptr;
         
         vkBeginCommandBuffer(command_buffer, &command_buffer_begin_info);
         
@@ -165,13 +157,13 @@ void SDLSubsystem::mainLoop()
         submit_info.signalSemaphoreCount = 1;
         submit_info.pSignalSemaphores    = &render_complete_semaphore;
         
-        vkQueueSubmit(renderer->getQueue(), 1, &submit_info, VK_NULL_HANDLE);
+        vkQueueSubmit(renderer->getQueue().queue, 1, &submit_info, VK_NULL_HANDLE);
         
         std::vector<VkSemaphore> sems_to_wait = {render_complete_semaphore};
         renderer->endRender( sems_to_wait );
 	}
     
-    vkQueueWaitIdle(renderer->getQueue());
+    vkQueueWaitIdle(renderer->getQueue().queue);
     vkDestroySemaphore(renderer->getDevice(), render_complete_semaphore, renderer->getAllocator());
     vkDestroyCommandPool(renderer->getDevice(), command_pool, renderer->getAllocator());
 }

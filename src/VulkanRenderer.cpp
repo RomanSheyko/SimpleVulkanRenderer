@@ -3,19 +3,19 @@
 #include <array>
 
 VulkanRenderer::VulkanRenderer(std::vector<const char*>& requiredInstanceExtentions, VkAllocationCallbacks* allocator) :
-surface(VK_NULL_HANDLE),
-gpu(VK_NULL_HANDLE),
-swapchain(VK_NULL_HANDLE),
-depth_stecil_image(VK_NULL_HANDLE),
-depth_stecil_image_view(VK_NULL_HANDLE),
-depth_stencil_format(VK_FORMAT_UNDEFINED),
-stencil_available(false),
-depth_stencil_image_memory(VK_NULL_HANDLE),
-render_pass(VK_NULL_HANDLE),
-active_swapchain_image_id(UINT32_MAX),
-swapchain_image_available(VK_NULL_HANDLE)
+render_pass(VK_NULL_HANDLE)
 {
-    swapchain_image_count = SWAPCHAIN_BUFFER_COUNT;
+    surface.surface = VK_NULL_HANDLE;
+    gpu.gpu = VK_NULL_HANDLE;
+    swapchain.swapchain = VK_NULL_HANDLE;
+    depth_stencil.depth_stecil_image = VK_NULL_HANDLE;
+    depth_stencil.depth_stecil_image_view = VK_NULL_HANDLE;
+    depth_stencil.depth_stencil_format = VK_FORMAT_UNDEFINED;
+    depth_stencil.stencil_available = false;
+    depth_stencil.depth_stencil_image_memory = VK_NULL_HANDLE;
+    swapchain.active_swapchain_image_id = UINT32_MAX;
+    swapchain.swapchain_image_available = VK_NULL_HANDLE;
+    swapchain.swapchain_image_count = SWAPCHAIN_BUFFER_COUNT;
 	this->allocator = allocator;
 	initInstance(requiredInstanceExtentions);
 #ifdef DEBUG_APPLICATION
@@ -37,13 +37,13 @@ swapchain_image_available(VK_NULL_HANDLE)
 }
 
 VulkanRenderer::~VulkanRenderer() {
-    vkQueueWaitIdle(queue);
-    if(swapchain_image_available != VK_NULL_HANDLE)
+    vkQueueWaitIdle(queue.queue);
+    if(swapchain.swapchain_image_available != VK_NULL_HANDLE)
     {
-        vkDestroyFence(logical_device, swapchain_image_available, allocator);
+        vkDestroyFence(logical_device, swapchain.swapchain_image_available, allocator);
     }
     
-    for(auto& el : framebuffers)
+    for(auto& el : swapchain.framebuffers)
     {
         vkDestroyFramebuffer(logical_device, el, allocator);
     }
@@ -53,30 +53,30 @@ VulkanRenderer::~VulkanRenderer() {
         vkDestroyRenderPass(logical_device, render_pass, allocator);
     }
     
-    if(depth_stecil_image_view != VK_NULL_HANDLE)
+    if(depth_stencil.depth_stecil_image_view != VK_NULL_HANDLE)
     {
-        vkDestroyImageView(logical_device, depth_stecil_image_view, allocator);
+        vkDestroyImageView(logical_device, depth_stencil.depth_stecil_image_view, allocator);
     }
     
-    vkFreeMemory(logical_device, depth_stencil_image_memory, allocator);
+    vkFreeMemory(logical_device, depth_stencil.depth_stencil_image_memory, allocator);
     
-    if(depth_stecil_image != VK_NULL_HANDLE)
+    if(depth_stencil.depth_stecil_image != VK_NULL_HANDLE)
     {
-        vkDestroyImage(logical_device, depth_stecil_image, allocator);
+        vkDestroyImage(logical_device, depth_stencil.depth_stecil_image, allocator);
     }
     
-    for(auto& el : swapchain_image_views)
+    for(auto& el : swapchain.swapchain_image_views)
     {
         vkDestroyImageView(logical_device, el, allocator); 
     }
     
-    if(swapchain != VK_NULL_HANDLE)
+    if(swapchain.swapchain != VK_NULL_HANDLE)
     {
-        vkDestroySwapchainKHR(logical_device, swapchain, allocator);
+        vkDestroySwapchainKHR(logical_device, swapchain.swapchain, allocator);
     }
-	if (surface != VK_NULL_HANDLE)
+	if (surface.surface != VK_NULL_HANDLE)
 	{
-		vkDestroySurfaceKHR(instance, surface, allocator);
+		vkDestroySurfaceKHR(instance, surface.surface, allocator);
 	}
 	//destroying logical device 
 	vkDeviceWaitIdle(logical_device);
@@ -95,9 +95,9 @@ void VulkanRenderer::initInstance(std::vector<const char*>& requiredInstanceExte
 	VkApplicationInfo app_info = {};
 
 	/*-----------------------Required features section------------------------*/
-	requiredDeviceFeatures = {};
-	requiredDeviceFeatures.multiDrawIndirect = VK_TRUE;
-	requiredDeviceFeatures.tessellationShader = VK_TRUE;
+	gpu.requiredDeviceFeatures = {};
+    gpu.requiredDeviceFeatures.multiDrawIndirect = VK_TRUE;
+    gpu.requiredDeviceFeatures.tessellationShader = VK_TRUE;
 	//requiredDeviceFeatures.geometryShader = VK_TRUE;
 	/*------------------------------------------------------------------------*/
 
@@ -180,31 +180,31 @@ void VulkanRenderer::selectPhysicalDevice() {
 	uint32_t physicalDeviceCount = 0;
 
 	if (vkEnumeratePhysicalDevices(instance, &physicalDeviceCount, nullptr) == VK_SUCCESS) {
-		number_of_selected_device = PHYSICAL_DEVICE_NUM;
+        gpu.number_of_selected_device = PHYSICAL_DEVICE_NUM;
 		setPhysicalDevice(PHYSICAL_DEVICE_NUM, physicalDeviceCount);
 	}
 	else throw RendererException("\"vkEnumeratePhysicalDevices\" error");
 }
 
 void VulkanRenderer::setPhysicalDevice(uint32_t selected_device_num, uint32_t physicalDevicesCount) {
-	physicalDevices.resize(physicalDevicesCount);
+    gpu.physicalDevices.resize(physicalDevicesCount);
 
-	if (vkEnumeratePhysicalDevices(instance, &physicalDevicesCount, &physicalDevices[0]) == VK_SUCCESS) {
-		vkGetPhysicalDeviceProperties(physicalDevices[selected_device_num], &selectedDeviceProperties);
-		vkGetPhysicalDeviceMemoryProperties(physicalDevices[selected_device_num], &selectedDeviceMemoryProperties);
+	if (vkEnumeratePhysicalDevices(instance, &physicalDevicesCount, &gpu.physicalDevices[0]) == VK_SUCCESS) {
+		vkGetPhysicalDeviceProperties(gpu.physicalDevices[selected_device_num], &gpu.selectedDeviceProperties);
+		vkGetPhysicalDeviceMemoryProperties(gpu.physicalDevices[selected_device_num], &gpu.selectedDeviceMemoryProperties);
 		setQueues();
 	}
 	else throw RendererException("\"vkEnumeratePhysicalDevices\" error");
-    gpu = physicalDevices[selected_device_num];
+    gpu.gpu = gpu.physicalDevices[selected_device_num];
 }
 
 void VulkanRenderer::checkFeatures() {
 	VkPhysicalDeviceFeatures supportedFeatures;
-	vkGetPhysicalDeviceFeatures(physicalDevices[number_of_selected_device], &supportedFeatures);
+	vkGetPhysicalDeviceFeatures(gpu.physicalDevices[gpu.number_of_selected_device], &supportedFeatures);
 
 	uint32_t offset = 0;
 	while (offset < sizeof(VkPhysicalDeviceFeatures)) {
-		if (*((VkBool32*)((uint8_t*)&requiredDeviceFeatures + offset)) == VK_TRUE) {
+		if (*((VkBool32*)((uint8_t*)&gpu.requiredDeviceFeatures + offset)) == VK_TRUE) {
 			if (*((VkBool32*)((uint8_t*)&supportedFeatures + offset)) != VK_TRUE)
 				throw RendererException("required feature is not supported");
 		}
@@ -213,17 +213,17 @@ void VulkanRenderer::checkFeatures() {
 }
 
 void VulkanRenderer::setQueues() {
-	queueFamilyPropertyCount = 0;
-	vkGetPhysicalDeviceQueueFamilyProperties(physicalDevices[number_of_selected_device], &queueFamilyPropertyCount, nullptr);
-	if (queueFamilyPropertyCount == 0)
+	queue.queueFamilyPropertyCount = 0;
+	vkGetPhysicalDeviceQueueFamilyProperties(gpu.physicalDevices[gpu.number_of_selected_device], &queue.queueFamilyPropertyCount, nullptr);
+	if (queue.queueFamilyPropertyCount == 0)
 		throw RendererException("zero queues detected");
-	queueFamilyProperties.resize(queueFamilyPropertyCount);
-	vkGetPhysicalDeviceQueueFamilyProperties(physicalDevices[number_of_selected_device], &queueFamilyPropertyCount, queueFamilyProperties.data());
-	for (uint32_t i = 0; i < queueFamilyProperties.size(); i++)
+    queue.queueFamilyProperties.resize(queue.queueFamilyPropertyCount);
+	vkGetPhysicalDeviceQueueFamilyProperties(gpu.physicalDevices[gpu.number_of_selected_device], &queue.queueFamilyPropertyCount, queue.queueFamilyProperties.data());
+	for (uint32_t i = 0; i < queue.queueFamilyProperties.size(); i++)
 	{
-		if (queueFamilyProperties[i].queueFlags & VK_QUEUE_GRAPHICS_BIT)
+		if ((queue.queueFamilyProperties[i].queueFlags & VK_QUEUE_GRAPHICS_BIT) && (queue.queueFamilyProperties[i].queueCount >= QUEUE_COUNT))
 		{
-			graphics_famaly_index = i;
+            queue.graphics_famaly_index = i;
 			return;
 		}
 	}
@@ -238,7 +238,7 @@ void VulkanRenderer::createLogicalDevice() {
 		VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO, //sType
 		nullptr,                                    //pNext
 		0,                                          //flags
-		graphics_famaly_index,                      //queueFamilyIndex
+        queue.graphics_famaly_index,                      //queueFamilyIndex
 		QUEUE_COUNT,                                //queueCount
 		priorities.data()                           //pQueuePriorities
 	};
@@ -247,10 +247,10 @@ void VulkanRenderer::createLogicalDevice() {
 	if (!requiredDeviceExtensions.empty()) {
 		uint32_t numDeviceExtention = 0;
 		std::vector<VkExtensionProperties> deviceSupportedExtentions;
-		vkEnumerateDeviceExtensionProperties(physicalDevices[number_of_selected_device], nullptr, &numDeviceExtention, nullptr);
+		vkEnumerateDeviceExtensionProperties(gpu.physicalDevices[gpu.number_of_selected_device], nullptr, &numDeviceExtention, nullptr);
 		if (numDeviceExtention > 0) {
 			deviceSupportedExtentions.resize(numDeviceExtention);
-			vkEnumerateDeviceExtensionProperties(physicalDevices[number_of_selected_device], nullptr, &numDeviceExtention, deviceSupportedExtentions.data());
+			vkEnumerateDeviceExtensionProperties(gpu.physicalDevices[gpu.number_of_selected_device], nullptr, &numDeviceExtention, deviceSupportedExtentions.data());
 			bool found;
 			for (auto extention_name : requiredDeviceExtensions) {
 				found = false;
@@ -271,10 +271,10 @@ void VulkanRenderer::createLogicalDevice() {
 	if (!requiredDeviceLayers.empty()) {
 		uint32_t numDeviceLayers = 0;
 		std::vector<VkLayerProperties> supportedDeviceLayers;
-		vkEnumerateDeviceLayerProperties(physicalDevices[number_of_selected_device], &numDeviceLayers, nullptr);
+		vkEnumerateDeviceLayerProperties(gpu.physicalDevices[gpu.number_of_selected_device], &numDeviceLayers, nullptr);
 		if (numDeviceLayers != 0) {
 			supportedDeviceLayers.resize(numDeviceLayers);
-			vkEnumerateDeviceLayerProperties(physicalDevices[number_of_selected_device], &numDeviceLayers, supportedDeviceLayers.data());
+			vkEnumerateDeviceLayerProperties(gpu.physicalDevices[gpu.number_of_selected_device], &numDeviceLayers, supportedDeviceLayers.data());
 			bool found;
 			for (auto layer_name : requiredDeviceLayers) {
 				found = false;
@@ -301,49 +301,49 @@ void VulkanRenderer::createLogicalDevice() {
 		requiredDeviceLayers.data(),               //ppEnabledLayerNames
 		(uint32_t)requiredDeviceExtensions.size(), //enabledExtentionCount
 		requiredDeviceExtensions.data(),           //ppEnabledExtensionNames
-		&requiredDeviceFeatures                    //pEnabledFeatures
+		&gpu.requiredDeviceFeatures                    //pEnabledFeatures
 	};
 
-	if (vkCreateDevice(physicalDevices[number_of_selected_device], &deviceCreateInfo, allocator, &logical_device) != VK_SUCCESS) {
+	if (vkCreateDevice(gpu.physicalDevices[gpu.number_of_selected_device], &deviceCreateInfo, allocator, &logical_device) != VK_SUCCESS) {
 		throw RendererException("unable to create logical device");
 	}
-    vkGetDeviceQueue(logical_device, graphics_famaly_index, 0, &queue);
+    vkGetDeviceQueue(logical_device, queue.graphics_famaly_index, 0, &queue.queue);
 }
 
 void VulkanRenderer::getSurfaceCapabilities()
 {
     VkBool32 WSI_supported = false;
-    vkGetPhysicalDeviceSurfaceSupportKHR(gpu,  graphics_famaly_index, surface, &WSI_supported);
+    vkGetPhysicalDeviceSurfaceSupportKHR(gpu.gpu, queue.graphics_famaly_index, surface.surface, &WSI_supported);
     if(!WSI_supported) throw RendererException("WSI not supported");
     
-    vkGetPhysicalDeviceSurfaceCapabilitiesKHR(gpu, surface, &surface_capabilities);
-    if(surface_capabilities.currentExtent.width < UINT32_MAX)
+    vkGetPhysicalDeviceSurfaceCapabilitiesKHR(gpu.gpu, surface.surface, &surface.surface_capabilities);
+    if(surface.surface_capabilities.currentExtent.width < UINT32_MAX)
     {
-        surface_size_x = surface_capabilities.currentExtent.width;
+        surface.surface_size_x = surface.surface_capabilities.currentExtent.width;
     }
     
-    if(surface_capabilities.currentExtent.height < UINT32_MAX)
+    if(surface.surface_capabilities.currentExtent.height < UINT32_MAX)
     {
-        surface_size_y = surface_capabilities.currentExtent.height;
+        surface.surface_size_y = surface.surface_capabilities.currentExtent.height;
     }
     
     uint32_t format_count = 0;
     
-    vkGetPhysicalDeviceSurfaceFormatsKHR(gpu, surface, & format_count, nullptr);
+    vkGetPhysicalDeviceSurfaceFormatsKHR(gpu.gpu, surface.surface, & format_count, nullptr);
     
     if(format_count < 1) throw RendererException("surface formats missing");
     
     std::vector<VkSurfaceFormatKHR> formats(format_count);
     
-    vkGetPhysicalDeviceSurfaceFormatsKHR(gpu, surface, & format_count, formats.data());
+    vkGetPhysicalDeviceSurfaceFormatsKHR(gpu.gpu, surface.surface, & format_count, formats.data());
     
     if(formats[0].format == VK_FORMAT_UNDEFINED)
     {
-        surface_format.format = VK_FORMAT_B8G8R8_UNORM;
-        surface_format.colorSpace = VK_COLOR_SPACE_SRGB_NONLINEAR_KHR;
+        surface.surface_format.format = VK_FORMAT_B8G8R8_UNORM;
+        surface.surface_format.colorSpace = VK_COLOR_SPACE_SRGB_NONLINEAR_KHR;
     }
     else {
-        surface_format = formats[0];
+        surface.surface_format = formats[0];
     }
 }
 
@@ -351,9 +351,9 @@ void VulkanRenderer::createSwapchain() {
     VkPresentModeKHR present_mode = VK_PRESENT_MODE_FIFO_KHR;
     
     uint32_t present_mode_count;
-    vkGetPhysicalDeviceSurfacePresentModesKHR(gpu, surface, &present_mode_count, nullptr);
+    vkGetPhysicalDeviceSurfacePresentModesKHR(gpu.gpu, surface.surface, &present_mode_count, nullptr);
     std::vector<VkPresentModeKHR> present_modes(present_mode_count);
-    vkGetPhysicalDeviceSurfacePresentModesKHR(gpu, surface, &present_mode_count, present_modes.data());
+    vkGetPhysicalDeviceSurfacePresentModesKHR(gpu.gpu, surface.surface, &present_mode_count, present_modes.data());
     for(auto& el : present_modes)
     {
         if(el == VK_PRESENT_MODE_MAILBOX_KHR) present_mode = el;
@@ -361,12 +361,12 @@ void VulkanRenderer::createSwapchain() {
     
     VkSwapchainCreateInfoKHR swapchain_create_info {};
     swapchain_create_info.sType                  = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR;
-    swapchain_create_info.surface                = surface;
+    swapchain_create_info.surface                = surface.surface;
     swapchain_create_info.minImageCount          = SWAPCHAIN_BUFFER_COUNT;
-    swapchain_create_info.imageFormat            = surface_format.format;
-    swapchain_create_info.imageColorSpace        = surface_format.colorSpace;
-    swapchain_create_info.imageExtent.width      = surface_size_x;
-    swapchain_create_info.imageExtent.height     = surface_size_y;
+    swapchain_create_info.imageFormat            = surface.surface_format.format;
+    swapchain_create_info.imageColorSpace        = surface.surface_format.colorSpace;
+    swapchain_create_info.imageExtent.width      = surface.surface_size_x;
+    swapchain_create_info.imageExtent.height     = surface.surface_size_y;
     swapchain_create_info.imageArrayLayers       = 1;
     swapchain_create_info.imageUsage             = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
     swapchain_create_info.imageSharingMode       = VK_SHARING_MODE_EXCLUSIVE;
@@ -378,24 +378,24 @@ void VulkanRenderer::createSwapchain() {
     swapchain_create_info.clipped                = VK_TRUE;
     swapchain_create_info.oldSwapchain           = nullptr;
     
-    vkCreateSwapchainKHR(logical_device, &swapchain_create_info, allocator, &swapchain);
+    vkCreateSwapchainKHR(logical_device, &swapchain_create_info, allocator, &swapchain.swapchain);
     
-    vkGetSwapchainImagesKHR(logical_device, swapchain, &swapchain_image_count, nullptr);
+    vkGetSwapchainImagesKHR(logical_device, swapchain.swapchain, &swapchain.swapchain_image_count, nullptr);
 }
 
 void VulkanRenderer::createSwapchainImages() { 
-    swapchain_images.resize(swapchain_image_count);
-    swapchain_image_views.resize(swapchain_image_count);
+    swapchain.swapchain_images.resize(swapchain.swapchain_image_count);
+    swapchain.swapchain_image_views.resize(swapchain.swapchain_image_count);
     
-    vkGetSwapchainImagesKHR(logical_device, swapchain, &swapchain_image_count, swapchain_images.data());
+    vkGetSwapchainImagesKHR(logical_device, swapchain.swapchain, &swapchain.swapchain_image_count, swapchain.swapchain_images.data());
     
-    for(uint32_t i = 0; i < swapchain_image_count; i++)
+    for(uint32_t i = 0; i < swapchain.swapchain_image_count; i++)
     {
         VkImageViewCreateInfo image_view_create_info {};
         image_view_create_info.sType                           = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
-        image_view_create_info.image                           = swapchain_images[i];
+        image_view_create_info.image                           = swapchain.swapchain_images[i];
         image_view_create_info.viewType                        = VK_IMAGE_VIEW_TYPE_2D;
-        image_view_create_info.format                          = surface_format.format;
+        image_view_create_info.format                          = surface.surface_format.format;
         image_view_create_info.components.r                    = VK_COMPONENT_SWIZZLE_IDENTITY;
         image_view_create_info.components.g                    = VK_COMPONENT_SWIZZLE_IDENTITY;
         image_view_create_info.components.b                    = VK_COMPONENT_SWIZZLE_IDENTITY;
@@ -406,7 +406,7 @@ void VulkanRenderer::createSwapchainImages() {
         image_view_create_info.subresourceRange.baseArrayLayer = 0;
         image_view_create_info.subresourceRange.layerCount     = 1;
         
-        vkCreateImageView(logical_device, &image_view_create_info, allocator, &swapchain_image_views[i]);
+        vkCreateImageView(logical_device, &image_view_create_info, allocator, &swapchain.swapchain_image_views[i]);
     }
 }
 
@@ -417,36 +417,36 @@ void VulkanRenderer::createDepthStecilImage()
     for(auto& el : try_formats)
     {
         VkFormatProperties format_properties{};
-        vkGetPhysicalDeviceFormatProperties(gpu, el, &format_properties);
+        vkGetPhysicalDeviceFormatProperties(gpu.gpu, el, &format_properties);
         
         if (format_properties.optimalTilingFeatures & VK_FORMAT_FEATURE_DEPTH_STENCIL_ATTACHMENT_BIT)
         {
-            depth_stencil_format = el;
+            depth_stencil.depth_stencil_format = el;
             break;
         }
     }
     
-    if(depth_stencil_format == VK_FORMAT_UNDEFINED)
+    if(depth_stencil.depth_stencil_format == VK_FORMAT_UNDEFINED)
     {
         throw RendererException("Depth stecil format not selected");
     }
     
-    if((depth_stencil_format == VK_FORMAT_D32_SFLOAT_S8_UINT) ||
-       (depth_stencil_format == VK_FORMAT_D24_UNORM_S8_UINT) ||
-       (depth_stencil_format == VK_FORMAT_D16_UNORM_S8_UINT) ||
-       (depth_stencil_format == VK_FORMAT_D32_SFLOAT) ||
-       (depth_stencil_format == VK_FORMAT_D16_UNORM))
+    if((depth_stencil.depth_stencil_format == VK_FORMAT_D32_SFLOAT_S8_UINT) ||
+       (depth_stencil.depth_stencil_format == VK_FORMAT_D24_UNORM_S8_UINT) ||
+       (depth_stencil.depth_stencil_format == VK_FORMAT_D16_UNORM_S8_UINT) ||
+       (depth_stencil.depth_stencil_format == VK_FORMAT_D32_SFLOAT) ||
+       (depth_stencil.depth_stencil_format == VK_FORMAT_D16_UNORM))
     {
-        stencil_available = true;
+        depth_stencil.stencil_available = true;
     }
     
     VkImageCreateInfo image_create_info {};
     image_create_info.sType                 = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
     image_create_info.flags                 = 0;
     image_create_info.imageType             = VK_IMAGE_TYPE_2D;
-    image_create_info.format                = depth_stencil_format;
-    image_create_info.extent.width          = surface_size_x;
-    image_create_info.extent.height         = surface_size_y;
+    image_create_info.format                = depth_stencil.depth_stencil_format;
+    image_create_info.extent.width          = surface.surface_size_x;
+    image_create_info.extent.height         = surface.surface_size_y;
     image_create_info.extent.depth          = 1;
     image_create_info.mipLevels             = 1;
     image_create_info.arrayLayers           = 1;
@@ -458,18 +458,18 @@ void VulkanRenderer::createDepthStecilImage()
     image_create_info.pQueueFamilyIndices   = nullptr;
     image_create_info.initialLayout         = VK_IMAGE_LAYOUT_UNDEFINED;
     
-    vkCreateImage(logical_device, &image_create_info, allocator, &depth_stecil_image);
+    vkCreateImage(logical_device, &image_create_info, allocator, &depth_stencil.depth_stecil_image);
     
     VkMemoryRequirements image_memory_requirements {};
-    vkGetImageMemoryRequirements(logical_device, depth_stecil_image, &image_memory_requirements);
+    vkGetImageMemoryRequirements(logical_device, depth_stencil.depth_stecil_image, &image_memory_requirements);
     auto required_property = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
     
     uint32_t memory_index = UINT32_MAX;
-    for(uint32_t i = 0; i < selectedDeviceMemoryProperties.memoryTypeCount; i++)
+    for(uint32_t i = 0; i < gpu.selectedDeviceMemoryProperties.memoryTypeCount; i++)
     {
         if(image_memory_requirements.memoryTypeBits & (1 << i))
         {
-            if((selectedDeviceMemoryProperties.memoryTypes[i].propertyFlags & required_property) == required_property)
+            if((gpu.selectedDeviceMemoryProperties.memoryTypes[i].propertyFlags & required_property) == required_property)
             {
                 memory_index = i;
                 break;
@@ -484,37 +484,32 @@ void VulkanRenderer::createDepthStecilImage()
     memory_allocate_info.allocationSize  = image_memory_requirements.size;
     memory_allocate_info.memoryTypeIndex = memory_index;
     
-    vkAllocateMemory(logical_device, &memory_allocate_info, allocator, &depth_stencil_image_memory);
-    vkBindImageMemory(logical_device, depth_stecil_image, depth_stencil_image_memory, 0);
+    vkAllocateMemory(logical_device, &memory_allocate_info, allocator, &depth_stencil.depth_stencil_image_memory);
+    vkBindImageMemory(logical_device, depth_stencil.depth_stecil_image, depth_stencil.depth_stencil_image_memory, 0);
     
     VkImageViewCreateInfo image_view_create_info {};
     image_view_create_info.sType                           = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
-    image_view_create_info.image                           = depth_stecil_image;
+    image_view_create_info.image                           = depth_stencil.depth_stecil_image;
     image_view_create_info.viewType                        = VK_IMAGE_VIEW_TYPE_2D;
-    image_view_create_info.format                          = depth_stencil_format;
+    image_view_create_info.format                          = depth_stencil.depth_stencil_format;
     image_view_create_info.components.r                    = VK_COMPONENT_SWIZZLE_IDENTITY;
     image_view_create_info.components.g                    = VK_COMPONENT_SWIZZLE_IDENTITY;
     image_view_create_info.components.b                    = VK_COMPONENT_SWIZZLE_IDENTITY;
     image_view_create_info.components.a                    = VK_COMPONENT_SWIZZLE_IDENTITY;
-    image_view_create_info.subresourceRange.aspectMask     = VK_IMAGE_ASPECT_DEPTH_BIT | (stencil_available ? VK_IMAGE_ASPECT_STENCIL_BIT : 0);
+    image_view_create_info.subresourceRange.aspectMask     = VK_IMAGE_ASPECT_DEPTH_BIT | (depth_stencil.stencil_available ? VK_IMAGE_ASPECT_STENCIL_BIT : 0);
     image_view_create_info.subresourceRange.baseMipLevel   = 0;
     image_view_create_info.subresourceRange.levelCount     = 1;
     image_view_create_info.subresourceRange.baseArrayLayer = 0;
     image_view_create_info.subresourceRange.layerCount     = 1;
     
-    vkCreateImageView(logical_device, &image_view_create_info, allocator, &depth_stecil_image_view);
-}
-
-const VkPhysicalDeviceMemoryProperties& VulkanRenderer::getVulkanPhysicalDeviceMemoryProperties() const
-{
-    return selectedDeviceMemoryProperties;
+    vkCreateImageView(logical_device, &image_view_create_info, allocator, &depth_stencil.depth_stecil_image_view);
 }
 
 void VulkanRenderer::createRenderPass()
 {
     std::array<VkAttachmentDescription, 2> attachments {};
     attachments[0].flags          = 0;
-    attachments[0].format         = depth_stencil_format;
+    attachments[0].format         = depth_stencil.depth_stencil_format;
     attachments[0].samples        = VK_SAMPLE_COUNT_1_BIT;
     attachments[0].loadOp         = VK_ATTACHMENT_LOAD_OP_CLEAR;
     attachments[0].storeOp        = VK_ATTACHMENT_STORE_OP_DONT_CARE;
@@ -524,7 +519,7 @@ void VulkanRenderer::createRenderPass()
     attachments[0].finalLayout    = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
     
     attachments[1].flags          = 0;
-    attachments[1].format         = surface_format.format;
+    attachments[1].format         = surface.surface_format.format;
     attachments[1].samples        = VK_SAMPLE_COUNT_1_BIT;
     attachments[1].loadOp         = VK_ATTACHMENT_LOAD_OP_CLEAR;
     attachments[1].storeOp        = VK_ATTACHMENT_STORE_OP_STORE;
@@ -560,31 +555,31 @@ void VulkanRenderer::createRenderPass()
 
 void VulkanRenderer::createFramebuffers()
 {
-    framebuffers.resize(swapchain_image_count);
-    for(uint32_t i = 0; i < swapchain_image_count; i++)
+    swapchain.framebuffers.resize(swapchain.swapchain_image_count);
+    for(uint32_t i = 0; i < swapchain.swapchain_image_count; i++)
     {
         std::array<VkImageView, 2> attachments {};
-        attachments[0] = depth_stecil_image_view;
-        attachments[1] = swapchain_image_views[i];
+        attachments[0] = depth_stencil.depth_stecil_image_view;
+        attachments[1] = swapchain.swapchain_image_views[i];
         
         VkFramebufferCreateInfo framebuffer_create_info {};
         framebuffer_create_info.sType           = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
         framebuffer_create_info.renderPass      = render_pass;
         framebuffer_create_info.attachmentCount = attachments.size();
         framebuffer_create_info.pAttachments    = attachments.data();
-        framebuffer_create_info.width           = surface_size_x;
-        framebuffer_create_info.height          = surface_size_y;
+        framebuffer_create_info.width           = surface.surface_size_x;
+        framebuffer_create_info.height          = surface.surface_size_y;
         framebuffer_create_info.layers          = 1;
         
-        vkCreateFramebuffer(logical_device, &framebuffer_create_info, allocator, &framebuffers[i]);
+        vkCreateFramebuffer(logical_device, &framebuffer_create_info, allocator, &swapchain.framebuffers[i]);
     }
 }
 
 void VulkanRenderer::beginRender() { 
-    vkAcquireNextImageKHR(logical_device, swapchain, UINT64_MAX, VK_NULL_HANDLE, swapchain_image_available, &active_swapchain_image_id);
-    vkWaitForFences(logical_device, 1, &swapchain_image_available, VK_TRUE, UINT64_MAX);
-    vkResetFences(logical_device, 1, &swapchain_image_available);
-    vkQueueWaitIdle(queue);
+    vkAcquireNextImageKHR(logical_device, swapchain.swapchain, UINT64_MAX, VK_NULL_HANDLE, swapchain.swapchain_image_available, &swapchain.active_swapchain_image_id);
+    vkWaitForFences(logical_device, 1, &swapchain.swapchain_image_available, VK_TRUE, UINT64_MAX);
+    vkResetFences(logical_device, 1, &swapchain.swapchain_image_available);
+    vkQueueWaitIdle(queue.queue);
     
 }
 
@@ -597,18 +592,29 @@ void VulkanRenderer::endRender(std::vector<VkSemaphore>& semapthores_to_wait) {
     present_info.waitSemaphoreCount = semapthores_to_wait.size();
     present_info.pWaitSemaphores    = semapthores_to_wait.data();
     present_info.swapchainCount     = 1;
-    present_info.pSwapchains        = &swapchain;
-    present_info.pImageIndices      = &active_swapchain_image_id;
+    present_info.pSwapchains        = &swapchain.swapchain;
+    present_info.pImageIndices      = &swapchain.active_swapchain_image_id;
     present_info.pResults           = &present_result;
     
     
-    vkQueuePresentKHR(queue, &present_info);
+    vkQueuePresentKHR(queue.queue, &present_info);
 }
 
 void VulkanRenderer::createSync() {
     VkFenceCreateInfo fence_create_info {};
     fence_create_info.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
-    vkCreateFence(logical_device, &fence_create_info, allocator, &swapchain_image_available);
+    vkCreateFence(logical_device, &fence_create_info, allocator, &swapchain.swapchain_image_available);
+}
+
+void VulkanRenderer::init()
+{
+    getSurfaceCapabilities();
+    createSwapchain();
+    createSwapchainImages();
+    createDepthStecilImage();
+    createRenderPass();
+    createFramebuffers();
+    createSync();
 }
 
 VKAPI_ATTR VkBool32 VKAPI_CALL vulkanDebugCallback(

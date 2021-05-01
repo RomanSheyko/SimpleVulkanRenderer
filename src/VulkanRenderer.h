@@ -82,33 +82,69 @@ VKAPI_ATTR VkBool32 VKAPI_CALL vulkanDebugCallback(
 
 #include "Allocator.h"
 
+struct PhysicalDevice
+{
+    VkPhysicalDeviceFeatures requiredDeviceFeatures;
+    std::vector<VkPhysicalDevice> physicalDevices;
+    VkPhysicalDevice gpu;
+    VkPhysicalDeviceProperties selectedDeviceProperties;
+    VkPhysicalDeviceMemoryProperties selectedDeviceMemoryProperties;
+    uint32_t number_of_selected_device;
+};
+
+struct Swapchain
+{
+    VkSwapchainKHR swapchain;
+    std::vector<VkImage> swapchain_images;
+    std::vector<VkImageView> swapchain_image_views;
+    uint32_t active_swapchain_image_id;
+    VkFence swapchain_image_available;
+    uint32_t swapchain_image_count;
+    std::vector<VkFramebuffer> framebuffers;
+};
+
+struct Surface
+{
+    VkSurfaceKHR surface;
+    VkSurfaceFormatKHR surface_format;
+    VkSurfaceCapabilitiesKHR surface_capabilities;
+    uint32_t surface_size_x;
+    uint32_t surface_size_y;
+};
+
+struct DepthStencil
+{
+    VkImage depth_stecil_image;
+    VkImageView depth_stecil_image_view;
+    VkFormat depth_stencil_format;
+    bool stencil_available;
+    VkDeviceMemory depth_stencil_image_memory;
+};
+
+struct Queue
+{
+    uint32_t queueFamilyPropertyCount;
+    uint32_t graphics_famaly_index;
+    std::vector<VkQueueFamilyProperties> queueFamilyProperties;
+    VkQueue queue;
+};
+
 class VulkanRenderer
 {
 private:
-    VkSurfaceKHR surface;
     VkInstance instance;
 	VkDevice logical_device;
-	uint32_t number_of_selected_device;
-	uint32_t queueFamilyPropertyCount;
 	VkAllocationCallbacks* allocator;
-	uint32_t graphics_famaly_index;
-    VkSwapchainKHR swapchain;
-    uint32_t swapchain_image_count;
-    
-    std::vector<VkImage> swapchain_images;
-    std::vector<VkImageView> swapchain_image_views;
+    VkRenderPass render_pass;
     
 #ifdef DEBUG_APPLICATION
 	VkDebugReportCallbackEXT reportCallback;
 #endif
-	VkPhysicalDeviceFeatures requiredDeviceFeatures;
-	std::vector<VkPhysicalDevice> physicalDevices;
-    VkPhysicalDevice gpu;
-	std::vector<VkQueueFamilyProperties> queueFamilyProperties;
-	VkPhysicalDeviceProperties selectedDeviceProperties;
-	VkPhysicalDeviceMemoryProperties selectedDeviceMemoryProperties;
-    
-    VkSurfaceFormatKHR surface_format;
+    PhysicalDevice gpu;
+    Swapchain swapchain;
+    Surface surface;
+    DepthStencil depth_stencil;
+    Queue queue;
 	
 	void initInstance(std::vector<const char*>& requiredInstanceExtentions);
 	void setPhysicalDevice(uint32_t selected_device_num, uint32_t physicalDevicesCount);
@@ -116,21 +152,39 @@ private:
 	void checkFeatures();
 	void setQueues();
     void createLogicalDevice();
-    VkSurfaceCapabilitiesKHR surface_capabilities;
-    uint32_t surface_size_x;
-    uint32_t surface_size_y;
-    VkImage depth_stecil_image;
-    VkImageView depth_stecil_image_view;
-    VkFormat depth_stencil_format;
-    bool stencil_available;
-    VkRenderPass render_pass;
-    VkDeviceMemory depth_stencil_image_memory;
-    std::vector<VkFramebuffer> framebuffers;
-    
-    uint32_t active_swapchain_image_id;
-    VkFence swapchain_image_available;
-    VkQueue queue;
+    void getSurfaceCapabilities();
+    void createSwapchain();
+    void createSwapchainImages();
+    void createDepthStecilImage();
+    void createRenderPass();
+    void createFramebuffers();
+    void createSync();
 public:
+    PhysicalDevice& getPhysicalDevice()
+    {
+        return gpu;
+    }
+    
+    Swapchain& getSwapchain()
+    {
+        return swapchain;
+    }
+    
+    Surface& getSurface()
+    {
+        return surface;
+    }
+    
+    DepthStencil& getDepthStencil()
+    {
+        return depth_stencil;
+    }
+    
+    Queue& getQueue()
+    {
+        return queue;
+    }
+    
     const VkDevice& getDevice() const
     {
         return logical_device;
@@ -139,16 +193,6 @@ public:
     VkInstance& getInstance()
     {
         return instance;
-    }
-    
-    VkSurfaceKHR& getSurface()
-    {
-        return surface;
-    }
-    
-    uint32_t getGraphicsFamalyIndex()
-    {
-        return graphics_famaly_index;
     }
     
     VkDevice getDevice()
@@ -168,27 +212,15 @@ public:
     
     VkFramebuffer getActiveFaramebuffer()
     {
-        return framebuffers[active_swapchain_image_id];
+        return swapchain.framebuffers[swapchain.active_swapchain_image_id];
     }
     
     VkExtent2D getSurfaceSize()
     {
-        return {surface_size_x, surface_size_y};
+        return {surface.surface_size_x, surface.surface_size_y};
     }
     
-    VkQueue getQueue()
-    {
-        return queue;
-    }
-    
-    void getSurfaceCapabilities();
-    void createSwapchain();
-    void createSwapchainImages();
-    void createDepthStecilImage();
-    void createRenderPass();
-    void createFramebuffers();
-    void createSync();
-    const VkPhysicalDeviceMemoryProperties& getVulkanPhysicalDeviceMemoryProperties() const;
+    void init();
     
     void beginRender();
     void endRender(std::vector<VkSemaphore>& semapthores_to_wait);
