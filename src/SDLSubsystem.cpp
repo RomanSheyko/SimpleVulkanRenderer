@@ -126,7 +126,7 @@ void SDLSubsystem::mainLoop()
         render_area.extent   = renderer->getSurfaceSize();
         
         std::array<VkClearValue, 2> clear_values {};
-        clear_values[0].depthStencil.depth   = 0.0f;
+        clear_values[0].depthStencil.depth   = 1.0f;
         clear_values[0].depthStencil.stencil = 0.0f;
         clear_values[1].color.float32[0]     = 0.0f;
         clear_values[1].color.float32[1]     = 0.0f;
@@ -142,6 +142,10 @@ void SDLSubsystem::mainLoop()
         render_pass_begin_info.pClearValues    = clear_values.data();
         
         vkCmdBeginRenderPass(command_buffer, &render_pass_begin_info, VK_SUBPASS_CONTENTS_INLINE);
+        
+        vkCmdBindPipeline(command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, renderer->getPipeline().getPipeline());
+        
+        vkCmdDraw(command_buffer, 3, 1, 0, 0);
         
         vkCmdEndRenderPass(command_buffer);
         

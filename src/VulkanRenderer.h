@@ -79,8 +79,12 @@ VKAPI_ATTR VkBool32 VKAPI_CALL vulkanDebugCallback(
 
 #define SWAPCHAIN_BUFFER_COUNT 2
 #define QUEUE_COUNT 1
+#define SHADER_PREFIX "/Users/roman/Documents/projects/SimpleVulkanRenderer/src/shaders/"
+#define VERTEX_SHADER "simple_shader.vert.spv"
+#define FRAGMENT_SHADER "simple_shader.frag.spv"
 
 #include "Allocator.h"
+#include "Pipeline.h"
 
 struct PhysicalDevice
 {
@@ -145,6 +149,8 @@ private:
     Surface surface;
     DepthStencil depth_stencil;
     Queue queue;
+    Pipeline* pipeline;
+    VkPipelineLayout pipelineLayout;
 	
 	void initInstance(std::vector<const char*>& requiredInstanceExtentions);
 	void setPhysicalDevice(uint32_t selected_device_num, uint32_t physicalDevicesCount);
@@ -159,6 +165,8 @@ private:
     void createRenderPass();
     void createFramebuffers();
     void createSync();
+    void createPipeline();
+    void createPipelineLayout();
 public:
     PhysicalDevice& getPhysicalDevice()
     {
@@ -218,6 +226,11 @@ public:
     VkExtent2D getSurfaceSize()
     {
         return {surface.surface_size_x, surface.surface_size_y};
+    }
+    
+    Pipeline& getPipeline()
+    {
+        return *pipeline;
     }
     
     void init();

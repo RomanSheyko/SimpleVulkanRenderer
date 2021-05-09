@@ -3,7 +3,8 @@
 #include <array>
 
 VulkanRenderer::VulkanRenderer(std::vector<const char*>& requiredInstanceExtentions, VkAllocationCallbacks* allocator) :
-render_pass(VK_NULL_HANDLE)
+render_pass(VK_NULL_HANDLE),
+pipelineLayout(VK_NULL_HANDLE)
 {
     surface.surface = VK_NULL_HANDLE;
     gpu.gpu = VK_NULL_HANDLE;
@@ -33,11 +34,19 @@ render_pass(VK_NULL_HANDLE)
 	std::cout << "Vulkan: report callback is set " << std::endl;
 #endif
 	createLogicalDevice();
+    pipeline = nullptr;
 	std::cout << "Vulkan: vulkan successfully initialized" << std::endl;
 }
 
 VulkanRenderer::~VulkanRenderer() {
     vkQueueWaitIdle(queue.queue);
+    if(pipeline != nullptr) delete pipeline;
+    
+    if(pipelineLayout != VK_NULL_HANDLE)
+    {
+        vkDestroyPipelineLayout(logical_device, pipelineLayout, nullptr);
+    }
+    
     if(swapchain.swapchain_image_available != VK_NULL_HANDLE)
     {
         vkDestroyFence(logical_device, swapchain.swapchain_image_available, allocator);
@@ -195,6 +204,7 @@ void VulkanRenderer::setPhysicalDevice(uint32_t selected_device_num, uint32_t ph
 		setQueues();
 	}
 	else throw RendererException("\"vkEnumeratePhysicalDevices\" error");
+    std::cout << "GPU: " << gpu.selectedDeviceProperties.deviceName << std::endl;
     gpu.gpu = gpu.physicalDevices[selected_device_num];
 }
 
@@ -580,7 +590,6 @@ void VulkanRenderer::beginRender() {
     vkWaitForFences(logical_device, 1, &swapchain.swapchain_image_available, VK_TRUE, UINT64_MAX);
     vkResetFences(logical_device, 1, &swapchain.swapchain_image_available);
     vkQueueWaitIdle(queue.queue);
-    
 }
 
 
@@ -615,7 +624,31 @@ void VulkanRenderer::init()
     createRenderPass();
     createFramebuffers();
     createSync();
+    createPipelineLayout();
+    createPipeline();
 }
+
+void VulkanRenderer::createPipeline()
+{
+    auto pipelineConfig = Pipeline::defaultPipelineConfigInfo(surface.surface_size_x, surface.surface_size_y);
+    pipelineConfig.renderPass = render_pass;
+    pipelineConfig.pipelineLayout = pipelineLayout;
+    pipeline = new Pipeline(logical_device, std::string(SHADER_PREFIX) + std::string(VERTEX_SHADER), std::string(SHADER_PREFIX) + std::string(FRAGMENT_SHADER), pipelineConfig);
+}
+
+void VulkanRenderer::createPipelineLayout() { 
+    VkPipelineLayoutCreateInfo pipelineLayoutInfo {};
+    pipelineLayoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
+    pipelineLayoutInfo.setLayoutCount = 0;
+    pipelineLayoutInfo.pSetLayouts = nullptr;
+    pipelineLayoutInfo.pushConstantRangeCount = 0;
+    pipelineLayoutInfo.pPushConstantRanges = nullptr;
+    if(vkCreatePipelineLayout(logical_device, &pipelineLayoutInfo, nullptr, &pipelineLayout) != VK_SUCCESS)
+    {
+        throw RendererException("Failed to create pipeline layout");
+    }
+}
+
 
 VKAPI_ATTR VkBool32 VKAPI_CALL vulkanDebugCallback(
 	VkDebugReportFlagsEXT flags,
