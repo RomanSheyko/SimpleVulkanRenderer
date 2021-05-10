@@ -94,6 +94,7 @@ struct PhysicalDevice
     VkPhysicalDeviceProperties selectedDeviceProperties;
     VkPhysicalDeviceMemoryProperties selectedDeviceMemoryProperties;
     uint32_t number_of_selected_device;
+    
 };
 
 struct Swapchain
@@ -151,6 +152,8 @@ private:
     Queue queue;
     Pipeline* pipeline;
     VkPipelineLayout pipelineLayout;
+    
+    uint32_t findMemoryType(uint32_t typeFilter, VkMemoryPropertyFlags properties);
 	
 	void initInstance(std::vector<const char*>& requiredInstanceExtentions);
 	void setPhysicalDevice(uint32_t selected_device_num, uint32_t physicalDevicesCount);
@@ -240,6 +243,8 @@ public:
     
 	VulkanRenderer(std::vector<const char*>& requiredInstanceExtentions, VkAllocationCallbacks* allocator = nullptr);
 	~VulkanRenderer();
+    
+    void createBuffer(VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyFlags properties, VkBuffer &buffer, VkDeviceMemory &bufferMemory);
 };
 
 #endif //VULKAN_RENDERER_H

@@ -2,6 +2,7 @@
 #include "Pipeline.h"
 #include <fstream>
 #include "RendererException.h"
+#include "Model.h"
 
 std::vector<char> Pipeline::readFile(const std::string &filepath) { 
     std::ifstream file{filepath, std::ios::ate | std::ios::binary};
@@ -59,12 +60,14 @@ void Pipeline::createGraphicsPipeline(const std::string &vertFile, const std::st
     shaderStages[1].flags               = 0;
     shaderStages[1].pNext               = nullptr;
     
+    auto bindingDescriptions = Model::Vertex::getBindingDescriptions();
+    auto attributeDescriptions = Model::Vertex::getAttributeDescriptions();
     VkPipelineVertexInputStateCreateInfo vertexInputInfo{};
     vertexInputInfo.sType                           = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
-    vertexInputInfo.vertexAttributeDescriptionCount = 0;
-    vertexInputInfo.vertexBindingDescriptionCount   = 0;
-    vertexInputInfo.pVertexAttributeDescriptions    = nullptr;
-    vertexInputInfo.pVertexBindingDescriptions      = nullptr;
+    vertexInputInfo.vertexAttributeDescriptionCount = static_cast<uint32_t>(attributeDescriptions.size());
+    vertexInputInfo.vertexBindingDescriptionCount   = static_cast<uint32_t>(bindingDescriptions.size());
+    vertexInputInfo.pVertexAttributeDescriptions    = attributeDescriptions.data();
+    vertexInputInfo.pVertexBindingDescriptions      = bindingDescriptions.data();
     
     VkPipelineViewportStateCreateInfo viewportInfo {};
     viewportInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO;

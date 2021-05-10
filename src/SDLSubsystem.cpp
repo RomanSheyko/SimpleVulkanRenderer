@@ -40,6 +40,7 @@ SDLSubsystem::SDLSubsystem(const char* window_name, size_t width, size_t height)
     }
     free(names);
     renderer = std::make_unique<VulkanRenderer>(requiredInstanceExtentions);
+    loadModels();
     
     createSurface();
 }
@@ -145,7 +146,8 @@ void SDLSubsystem::mainLoop()
         
         vkCmdBindPipeline(command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, renderer->getPipeline().getPipeline());
         
-        vkCmdDraw(command_buffer, 3, 1, 0, 0);
+        model->bind(command_buffer);
+        model->draw(command_buffer);
         
         vkCmdEndRenderPass(command_buffer);
         
@@ -177,3 +179,14 @@ SDLSubsystem::~SDLSubsystem()
 	SDL_DestroyWindow(window);
 	SDL_Quit();
 }
+
+void SDLSubsystem::loadModels() { 
+    std::vector<Model::Vertex> vertices {
+        {{0.0f, -0.5f}},
+        {{0.5f, 0.5f}},
+        {{-0.5f, 0.5f}}
+    };
+    
+    model = std::make_unique<Model>(*renderer.get(), vertices);
+}
+

@@ -649,6 +649,42 @@ void VulkanRenderer::createPipelineLayout() {
     }
 }
 
+uint32_t VulkanRenderer::findMemoryType(uint32_t typeFilter, VkMemoryPropertyFlags properties) {
+  for (uint32_t i = 0; i < gpu.selectedDeviceMemoryProperties.memoryTypeCount; i++) {
+    if ((typeFilter & (1 << i)) &&
+        (gpu.selectedDeviceMemoryProperties.memoryTypes[i].propertyFlags & properties) == properties) {
+      return i;
+    }
+  }
+
+  throw RendererException("failed to find suitable memory type!");
+}
+
+void VulkanRenderer::createBuffer(VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyFlags properties, VkBuffer &buffer, VkDeviceMemory &bufferMemory) {
+    VkBufferCreateInfo bufferInfo{};
+    bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+    bufferInfo.size = size;
+    bufferInfo.usage = usage;
+    bufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+
+    if (vkCreateBuffer(logical_device, &bufferInfo, nullptr, &buffer) != VK_SUCCESS) {
+    throw std::runtime_error("failed to create vertex buffer!");
+    }
+
+    VkMemoryRequirements memRequirements;
+    vkGetBufferMemoryRequirements(logical_device, buffer, &memRequirements);
+
+    VkMemoryAllocateInfo allocInfo{};
+    allocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+    allocInfo.allocationSize = memRequirements.size;
+    allocInfo.memoryTypeIndex = findMemoryType(memRequirements.memoryTypeBits, properties);
+
+    if (vkAllocateMemory(logical_device, &allocInfo, nullptr, &bufferMemory) != VK_SUCCESS) {
+    throw std::runtime_error("failed to allocate vertex buffer memory!");
+    }
+
+    vkBindBufferMemory(logical_device, buffer, bufferMemory, 0);
+}
 
 VKAPI_ATTR VkBool32 VKAPI_CALL vulkanDebugCallback(
 	VkDebugReportFlagsEXT flags,
