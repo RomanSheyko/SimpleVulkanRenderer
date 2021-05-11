@@ -24,7 +24,7 @@ public:
     Pipeline(VkDevice& device, const std::string& vertFile, const std::string& fragFile, const PipelineConfigInfo& configInfo);
     
     Pipeline(const Pipeline&) = delete;
-    void operator=(const Pipeline&) = delete;
+    Pipeline& operator=(const Pipeline&) = delete;
     
     static PipelineConfigInfo defaultPipelineConfigInfo(uint32_t width, uint32_t heigth);
     ~Pipeline();
@@ -32,6 +32,11 @@ public:
     VkPipeline getPipeline()
     {
         return graphicsPipeline;
+    }
+    
+    VkDescriptorSetLayout getDescriptorSetLayout()
+    {
+        return descriptorSetLayout;
     }
     
 private:
@@ -43,6 +48,7 @@ private:
     
     VkPipeline graphicsPipeline;
     VkDevice& device;
+    VkDescriptorSetLayout descriptorSetLayout;
     VkShaderModule vertShaderModule;
     VkShaderModule fragShaderModule;
 };

@@ -1,10 +1,16 @@
 #include "VulkanRenderer.h"
 #include <iostream>
 #include <array>
+#include "SceneObject.h"
 
 VulkanRenderer::VulkanRenderer(std::vector<const char*>& requiredInstanceExtentions, VkAllocationCallbacks* allocator) :
 render_pass(VK_NULL_HANDLE),
-pipelineLayout(VK_NULL_HANDLE)
+pipelineLayout(VK_NULL_HANDLE),
+descriptorSetLayout(VK_NULL_HANDLE),
+descriptorPool(VK_NULL_HANDLE),
+command_pool(VK_NULL_HANDLE),
+command_buffer(VK_NULL_HANDLE),
+render_complete_semaphore(VK_NULL_HANDLE)
 {
     surface.surface = VK_NULL_HANDLE;
     gpu.gpu = VK_NULL_HANDLE;
@@ -42,14 +48,34 @@ VulkanRenderer::~VulkanRenderer() {
     vkQueueWaitIdle(queue.queue);
     if(pipeline != nullptr) delete pipeline;
     
+    if(descriptorSetLayout != VK_NULL_HANDLE)
+    {
+        vkDestroyDescriptorSetLayout(logical_device, descriptorSetLayout, nullptr);
+    }
+    
     if(pipelineLayout != VK_NULL_HANDLE)
     {
         vkDestroyPipelineLayout(logical_device, pipelineLayout, nullptr);
     }
     
+    if(descriptorPool != VK_NULL_HANDLE)
+    {
+        vkDestroyDescriptorPool(logical_device, descriptorPool, nullptr);
+    }
+    
     if(swapchain.swapchain_image_available != VK_NULL_HANDLE)
     {
         vkDestroyFence(logical_device, swapchain.swapchain_image_available, allocator);
+    }
+    
+    if(render_complete_semaphore != VK_NULL_HANDLE)
+    {
+        vkDestroySemaphore(logical_device, render_complete_semaphore, nullptr);
+    }
+    
+    if(command_pool != VK_NULL_HANDLE)
+    {
+        vkDestroyCommandPool(logical_device, command_pool, nullptr);
     }
     
     for(auto& el : swapchain.framebuffers)
@@ -388,6 +414,8 @@ void VulkanRenderer::createSwapchain() {
     swapchain_create_info.clipped                = VK_TRUE;
     swapchain_create_info.oldSwapchain           = nullptr;
     
+    swapchain.extent = swapchain_create_info.imageExtent;
+    
     vkCreateSwapchainKHR(logical_device, &swapchain_create_info, allocator, &swapchain.swapchain);
     
     vkGetSwapchainImagesKHR(logical_device, swapchain.swapchain, &swapchain.swapchain_image_count, nullptr);
@@ -593,7 +621,7 @@ void VulkanRenderer::beginRender() {
 }
 
 
-void VulkanRenderer::endRender(std::vector<VkSemaphore>& semapthores_to_wait) {
+void VulkanRenderer::endRender() {
     VkResult present_result = VkResult::VK_RESULT_MAX_ENUM;
     
     VkPresentInfoKHR present_info {};
@@ -604,7 +632,6 @@ void VulkanRenderer::endRender(std::vector<VkSemaphore>& semapthores_to_wait) {
     present_info.pSwapchains        = &swapchain.swapchain;
     present_info.pImageIndices      = &swapchain.active_swapchain_image_id;
     present_info.pResults           = &present_result;
-    
     
     vkQueuePresentKHR(queue.queue, &present_info);
 }
@@ -623,7 +650,11 @@ void VulkanRenderer::init()
     createDepthStecilImage();
     createRenderPass();
     createFramebuffers();
+    createCommandPool();
+    createSemaphores();
+    allocateCommandBuffer();
     createSync();
+    createDescriptorPool();
     createPipelineLayout();
     createPipeline();
 }
@@ -636,11 +667,28 @@ void VulkanRenderer::createPipeline()
     pipeline = new Pipeline(logical_device, std::string(SHADER_PREFIX) + std::string(VERTEX_SHADER), std::string(SHADER_PREFIX) + std::string(FRAGMENT_SHADER), pipelineConfig);
 }
 
-void VulkanRenderer::createPipelineLayout() { 
+void VulkanRenderer::createPipelineLayout() {
+    /*
+    VkPushConstantRange pushConstantRange {};
+    pushConstantRange.stageFlags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT;
+    pushConstantRange.offset     = 0;
+    pushConstantRange.size       = sizeof(SimplePushConstantData);
+     */
+    
+    auto layoutBindings = Model::UniformBufferObject::getLayoutBindings();
+    VkDescriptorSetLayoutCreateInfo layoutInfo{};
+    layoutInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
+    layoutInfo.bindingCount = layoutBindings.size();
+    layoutInfo.pBindings = layoutBindings.data();
+    
+    if (vkCreateDescriptorSetLayout(logical_device, &layoutInfo, nullptr, &descriptorSetLayout) != VK_SUCCESS) {
+        throw RendererException("failed to create descriptor set layout!");
+    }
+    
     VkPipelineLayoutCreateInfo pipelineLayoutInfo {};
     pipelineLayoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
-    pipelineLayoutInfo.setLayoutCount = 0;
-    pipelineLayoutInfo.pSetLayouts = nullptr;
+    pipelineLayoutInfo.setLayoutCount = 1;
+    pipelineLayoutInfo.pSetLayouts = &descriptorSetLayout;
     pipelineLayoutInfo.pushConstantRangeCount = 0;
     pipelineLayoutInfo.pPushConstantRanges = nullptr;
     if(vkCreatePipelineLayout(logical_device, &pipelineLayoutInfo, nullptr, &pipelineLayout) != VK_SUCCESS)
@@ -684,6 +732,149 @@ void VulkanRenderer::createBuffer(VkDeviceSize size, VkBufferUsageFlags usage, V
     }
 
     vkBindBufferMemory(logical_device, buffer, bufferMemory, 0);
+}
+
+void VulkanRenderer::createDescriptorPool() { 
+    VkDescriptorPoolSize poolSize{};
+    poolSize.type            = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+    poolSize.descriptorCount = static_cast<uint32_t>(swapchain.swapchain_image_count);
+    
+    VkDescriptorPoolCreateInfo poolInfo{};
+    poolInfo.sType         = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
+    poolInfo.poolSizeCount = 1;
+    poolInfo.pPoolSizes    = &poolSize;
+    poolInfo.maxSets       = static_cast<uint32_t>(swapchain.swapchain_image_count);
+    
+    if (vkCreateDescriptorPool(logical_device, &poolInfo, nullptr, &descriptorPool) != VK_SUCCESS) {
+        throw RendererException("failed to create descriptor pool!");
+    }
+}
+
+void VulkanRenderer::copyBuffer(VkBuffer srcBuffer, VkBuffer dstBuffer, VkDeviceSize size) { 
+    VkCommandBufferAllocateInfo allocInfo{};
+    allocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+    allocInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+    allocInfo.commandPool = command_pool;
+    allocInfo.commandBufferCount = 1;
+
+    VkCommandBuffer commandBuffer;
+    vkAllocateCommandBuffers(logical_device, &allocInfo, &commandBuffer);
+    
+    VkCommandBufferBeginInfo beginInfo{};
+    beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+    beginInfo.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
+
+    vkBeginCommandBuffer(commandBuffer, &beginInfo);
+    VkBufferCopy copyRegion{};
+    copyRegion.srcOffset = 0; // Optional
+    copyRegion.dstOffset = 0; // Optional
+    copyRegion.size = size;
+    vkCmdCopyBuffer(commandBuffer, srcBuffer, dstBuffer, 1, &copyRegion);
+    
+    vkEndCommandBuffer(commandBuffer);
+    VkSubmitInfo submitInfo{};
+    submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+    submitInfo.commandBufferCount = 1;
+    submitInfo.pCommandBuffers = &commandBuffer;
+
+    vkQueueSubmit(queue.queue, 1, &submitInfo, VK_NULL_HANDLE);
+    vkQueueWaitIdle(queue.queue);
+    vkFreeCommandBuffers(logical_device, command_pool, 1, &commandBuffer);
+}
+
+void VulkanRenderer::createCommandPool() {
+    VkCommandPoolCreateInfo command_pool_create_info {};
+    command_pool_create_info.sType            = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
+    command_pool_create_info.flags            = VK_COMMAND_POOL_CREATE_TRANSIENT_BIT | VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
+    command_pool_create_info.queueFamilyIndex = queue.graphics_famaly_index;
+    
+    vkCreateCommandPool(logical_device, &command_pool_create_info, nullptr, &command_pool);
+}
+
+void VulkanRenderer::allocateCommandBuffer() { 
+    VkCommandBufferAllocateInfo command_buffer_allocate_info {};
+    command_buffer_allocate_info.sType              = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+    command_buffer_allocate_info.commandPool        = command_pool;
+    command_buffer_allocate_info.level              = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+    command_buffer_allocate_info.commandBufferCount = 1;
+    
+    vkAllocateCommandBuffers(logical_device, &command_buffer_allocate_info, &command_buffer);
+}
+
+void VulkanRenderer::createSemaphores() { 
+    VkSemaphoreCreateInfo semaphore_create_info {};
+    semaphore_create_info.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
+    
+    vkCreateSemaphore(logical_device, &semaphore_create_info, nullptr, &render_complete_semaphore);
+    semapthores_to_wait.push_back(render_complete_semaphore);
+}
+
+void VulkanRenderer::renderSceneObjects(const std::vector<SceneObject>& sceneObjects)
+{
+    for(auto& obj : sceneObjects)
+    {
+        //SimplePushConstantData push {};
+        //push.offset = obj.transform2d.translation;
+        //push.color = obj.color;
+        //push.transform = obj.transform2d.mat2();
+        
+        //vkCmdPushConstants(commandBuffer, renderer->getPipelineLayput(), VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(SimplePushConstantData), &push);
+        obj.model->bind(command_buffer);
+        obj.model->updateUniformBuffer(swapchain.active_swapchain_image_id);
+        obj.model->draw(command_buffer);
+    }
+}
+
+void VulkanRenderer::update(const std::vector<SceneObject>& sceneObjects) {
+    VkCommandBufferBeginInfo command_buffer_begin_info {};
+    command_buffer_begin_info.sType            = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+    command_buffer_begin_info.flags            = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
+    //command_buffer_begin_info.pInheritanceInfo = nullptr;
+    
+    vkBeginCommandBuffer(command_buffer, &command_buffer_begin_info);
+    
+    VkRect2D render_area {};
+    render_area.offset.x = 0;
+    render_area.offset.y = 0;
+    render_area.extent   = getSurfaceSize();
+    
+    std::array<VkClearValue, 2> clear_values {};
+    clear_values[0].depthStencil.depth   = 1.0f;
+    clear_values[0].depthStencil.stencil = 0.0f;
+    clear_values[1].color.float32[0]     = 0.0f;
+    clear_values[1].color.float32[1]     = 0.0f;
+    clear_values[1].color.float32[2]     = 0.0f;
+    clear_values[1].color.float32[3]     = 0.0f;
+    
+    VkRenderPassBeginInfo render_pass_begin_info {};
+    render_pass_begin_info.sType           = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
+    render_pass_begin_info.renderPass      = render_pass;
+    render_pass_begin_info.framebuffer     = getActiveFaramebuffer();
+    render_pass_begin_info.renderArea      = render_area;
+    render_pass_begin_info.clearValueCount = clear_values.size();
+    render_pass_begin_info.pClearValues    = clear_values.data();
+    
+    vkCmdBeginRenderPass(command_buffer, &render_pass_begin_info, VK_SUBPASS_CONTENTS_INLINE);
+    
+    vkCmdBindPipeline(command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline->getPipeline());
+    
+    renderSceneObjects(sceneObjects);
+    
+    vkCmdEndRenderPass(command_buffer);
+    
+    vkEndCommandBuffer(command_buffer);
+    
+    VkSubmitInfo submit_info {};
+    submit_info.sType                = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+    submit_info.waitSemaphoreCount   = 0;
+    submit_info.pWaitSemaphores      = nullptr;
+    submit_info.pWaitDstStageMask    = nullptr;
+    submit_info.commandBufferCount   = 1;
+    submit_info.pCommandBuffers      = &command_buffer;
+    submit_info.signalSemaphoreCount = 1;
+    submit_info.pSignalSemaphores    = &render_complete_semaphore;
+    
+    vkQueueSubmit(queue.queue, 1, &submit_info, VK_NULL_HANDLE);
 }
 
 VKAPI_ATTR VkBool32 VKAPI_CALL vulkanDebugCallback(

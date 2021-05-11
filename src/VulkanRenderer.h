@@ -86,6 +86,20 @@ VKAPI_ATTR VkBool32 VKAPI_CALL vulkanDebugCallback(
 #include "Allocator.h"
 #include "Pipeline.h"
 
+#define GLM_FORCE_RADIANS
+#define GLM_FORCE_DEPTH_ZERO_TO_ONE
+#include <glm/glm.hpp>
+class SceneObject;
+
+/*
+struct SimplePushConstantData
+{
+    glm::mat2 transform { 1.f };
+    glm::vec2 offset;
+    alignas(16) glm::vec3 color;
+};
+ */
+
 struct PhysicalDevice
 {
     VkPhysicalDeviceFeatures requiredDeviceFeatures;
@@ -94,7 +108,6 @@ struct PhysicalDevice
     VkPhysicalDeviceProperties selectedDeviceProperties;
     VkPhysicalDeviceMemoryProperties selectedDeviceMemoryProperties;
     uint32_t number_of_selected_device;
-    
 };
 
 struct Swapchain
@@ -106,6 +119,7 @@ struct Swapchain
     VkFence swapchain_image_available;
     uint32_t swapchain_image_count;
     std::vector<VkFramebuffer> framebuffers;
+    VkExtent2D extent;
 };
 
 struct Surface
@@ -151,7 +165,13 @@ private:
     DepthStencil depth_stencil;
     Queue queue;
     Pipeline* pipeline;
+    VkDescriptorSetLayout descriptorSetLayout;
     VkPipelineLayout pipelineLayout;
+    VkDescriptorPool descriptorPool;
+    VkCommandPool command_pool;
+    VkCommandBuffer command_buffer;
+    VkSemaphore render_complete_semaphore;
+    std::vector<VkSemaphore> semapthores_to_wait;
     
     uint32_t findMemoryType(uint32_t typeFilter, VkMemoryPropertyFlags properties);
 	
@@ -170,6 +190,11 @@ private:
     void createSync();
     void createPipeline();
     void createPipelineLayout();
+    void createDescriptorPool();
+    void createCommandPool();
+    void allocateCommandBuffer();
+    void createSemaphores();
+    void renderSceneObjects(const std::vector<SceneObject>& sceneObjects);
 public:
     PhysicalDevice& getPhysicalDevice()
     {
@@ -236,15 +261,42 @@ public:
         return *pipeline;
     }
     
+    VkPipelineLayout getPipelineLayout()
+    {
+        return pipelineLayout;
+    }
+    
+    VkDescriptorSetLayout getDescriptorSetLayout()
+    {
+        return descriptorSetLayout;
+    }
+    
+    VkDescriptorPool getDescriptorPool()
+    {
+        return descriptorPool;
+    }
+    
+    VkCommandPool getCommandPool()
+    {
+        return command_pool;
+    }
+    
     void init();
     
     void beginRender();
-    void endRender(std::vector<VkSemaphore>& semapthores_to_wait);
+    void endRender();
     
 	VulkanRenderer(std::vector<const char*>& requiredInstanceExtentions, VkAllocationCallbacks* allocator = nullptr);
 	~VulkanRenderer();
     
     void createBuffer(VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyFlags properties, VkBuffer &buffer, VkDeviceMemory &bufferMemory);
+    void copyBuffer(VkBuffer srcBuffer, VkBuffer dstBuffer, VkDeviceSize size);
+    
+    void update(const std::vector<SceneObject>& sceneObjects);
+    void waitIdle()
+    {
+        vkQueueWaitIdle(queue.queue);
+    }
 };
 
 #endif //VULKAN_RENDERER_H

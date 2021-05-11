@@ -40,9 +40,9 @@ SDLSubsystem::SDLSubsystem(const char* window_name, size_t width, size_t height)
     }
     free(names);
     renderer = std::make_unique<VulkanRenderer>(requiredInstanceExtentions);
-    loadModels();
     
     createSurface();
+    loadSceneObjects();
 }
 
 
@@ -68,28 +68,6 @@ void SDLSubsystem::mainLoop()
 {
 	SDL_Event e;
 	bool exit = false;
-    VkCommandPool command_pool = VK_NULL_HANDLE;
-    VkCommandPoolCreateInfo command_pool_create_info {};
-    command_pool_create_info.sType            = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
-    command_pool_create_info.flags            = VK_COMMAND_POOL_CREATE_TRANSIENT_BIT | VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
-    command_pool_create_info.queueFamilyIndex = renderer->getQueue().graphics_famaly_index;
-    
-    vkCreateCommandPool(renderer->getDevice(), &command_pool_create_info, renderer->getAllocator(), &command_pool);
-    
-    VkCommandBuffer command_buffer = VK_NULL_HANDLE;
-    VkCommandBufferAllocateInfo command_buffer_allocate_info {};
-    command_buffer_allocate_info.sType              = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
-    command_buffer_allocate_info.commandPool        = command_pool;
-    command_buffer_allocate_info.level              = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
-    command_buffer_allocate_info.commandBufferCount = 1;
-    
-    vkAllocateCommandBuffers(renderer->getDevice(), &command_buffer_allocate_info, &command_buffer);
-    
-    VkSemaphore render_complete_semaphore = VK_NULL_HANDLE;
-    VkSemaphoreCreateInfo semaphore_create_info {};
-    semaphore_create_info.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
-    
-    vkCreateSemaphore(renderer->getDevice(), &semaphore_create_info, renderer->getAllocator(), &render_complete_semaphore);
     
     auto timer = std::chrono::steady_clock();
     auto last_time = timer.now();
@@ -112,66 +90,17 @@ void SDLSubsystem::mainLoop()
             frame_counter = 0;
             std::cout << "FPS: " << fps << std::endl;
         }
+        static int frame = 30;
+        frame = (frame + 1) % 100;
+        
         renderer->beginRender();
         
-        VkCommandBufferBeginInfo command_buffer_begin_info {};
-        command_buffer_begin_info.sType            = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
-        command_buffer_begin_info.flags            = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
-        //command_buffer_begin_info.pInheritanceInfo = nullptr;
+        renderer->update(sceneObjects);
         
-        vkBeginCommandBuffer(command_buffer, &command_buffer_begin_info);
-        
-        VkRect2D render_area {};
-        render_area.offset.x = 0;
-        render_area.offset.y = 0;
-        render_area.extent   = renderer->getSurfaceSize();
-        
-        std::array<VkClearValue, 2> clear_values {};
-        clear_values[0].depthStencil.depth   = 1.0f;
-        clear_values[0].depthStencil.stencil = 0.0f;
-        clear_values[1].color.float32[0]     = 0.0f;
-        clear_values[1].color.float32[1]     = 0.0f;
-        clear_values[1].color.float32[2]     = 0.0f;
-        clear_values[1].color.float32[3]     = 0.0f;
-        
-        VkRenderPassBeginInfo render_pass_begin_info {};
-        render_pass_begin_info.sType           = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
-        render_pass_begin_info.renderPass      = renderer->getRenderPass();
-        render_pass_begin_info.framebuffer     = renderer->getActiveFaramebuffer();
-        render_pass_begin_info.renderArea      = render_area;
-        render_pass_begin_info.clearValueCount = clear_values.size();
-        render_pass_begin_info.pClearValues    = clear_values.data();
-        
-        vkCmdBeginRenderPass(command_buffer, &render_pass_begin_info, VK_SUBPASS_CONTENTS_INLINE);
-        
-        vkCmdBindPipeline(command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, renderer->getPipeline().getPipeline());
-        
-        model->bind(command_buffer);
-        model->draw(command_buffer);
-        
-        vkCmdEndRenderPass(command_buffer);
-        
-        vkEndCommandBuffer(command_buffer);
-        
-        VkSubmitInfo submit_info {};
-        submit_info.sType                = VK_STRUCTURE_TYPE_SUBMIT_INFO;
-        submit_info.waitSemaphoreCount   = 0;
-        submit_info.pWaitSemaphores      = nullptr;
-        submit_info.pWaitDstStageMask    = nullptr;
-        submit_info.commandBufferCount   = 1;
-        submit_info.pCommandBuffers      = &command_buffer;
-        submit_info.signalSemaphoreCount = 1;
-        submit_info.pSignalSemaphores    = &render_complete_semaphore;
-        
-        vkQueueSubmit(renderer->getQueue().queue, 1, &submit_info, VK_NULL_HANDLE);
-        
-        std::vector<VkSemaphore> sems_to_wait = {render_complete_semaphore};
-        renderer->endRender( sems_to_wait );
+        renderer->endRender();
 	}
     
-    vkQueueWaitIdle(renderer->getQueue().queue);
-    vkDestroySemaphore(renderer->getDevice(), render_complete_semaphore, renderer->getAllocator());
-    vkDestroyCommandPool(renderer->getDevice(), command_pool, renderer->getAllocator());
+    renderer->waitIdle();
 }
 
 SDLSubsystem::~SDLSubsystem()
@@ -180,13 +109,25 @@ SDLSubsystem::~SDLSubsystem()
 	SDL_Quit();
 }
 
-void SDLSubsystem::loadModels() { 
-    std::vector<Model::Vertex> vertices {
-        {{0.0f, -0.5f}},
-        {{0.5f, 0.5f}},
-        {{-0.5f, 0.5f}}
+void SDLSubsystem::loadSceneObjects() {
+    std::vector<Model::Vertex> vertices = {
+        {{-0.5f, -0.5f}, {1.0f, 0.0f, 0.0f}},
+        {{0.5f, -0.5f}, {0.0f, 1.0f, 0.0f}},
+        {{0.5f, 0.5f}, {0.0f, 0.0f, 1.0f}},
+        {{-0.5f, 0.5f}, {1.0f, 1.0f, 1.0f}}
     };
     
-    model = std::make_unique<Model>(*renderer.get(), vertices);
+    std::vector<uint16_t> indices = {
+        0, 1, 2, 2, 3, 0
+    };
+    
+    auto model = std::make_shared<Model>(*renderer.get(), vertices, indices);
+    
+    auto traingle = SceneObject::createSceneObject();
+    traingle.model = model;
+    //traingle.color = {.1f, .8f, .1f};
+    //traingle.transform2d.translation.x = .2f;
+    
+    sceneObjects.push_back(std::move(traingle));
 }
 
