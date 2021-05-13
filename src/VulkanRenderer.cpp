@@ -809,7 +809,7 @@ void VulkanRenderer::createSemaphores() {
     semapthores_to_wait.push_back(render_complete_semaphore);
 }
 
-void VulkanRenderer::renderSceneObjects(const std::vector<SceneObject>& sceneObjects)
+void VulkanRenderer::renderSceneObjects(const std::vector<SceneObject>& sceneObjects, const Camera& camInfo)
 {
     for(auto& obj : sceneObjects)
     {
@@ -820,12 +820,12 @@ void VulkanRenderer::renderSceneObjects(const std::vector<SceneObject>& sceneObj
         
         //vkCmdPushConstants(commandBuffer, renderer->getPipelineLayput(), VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(SimplePushConstantData), &push);
         obj.model->bind(command_buffer);
-        obj.model->updateUniformBuffer(swapchain.active_swapchain_image_id);
+        obj.model->updateUniformBuffer(swapchain.active_swapchain_image_id, camInfo);
         obj.model->draw(command_buffer);
     }
 }
 
-void VulkanRenderer::update(const std::vector<SceneObject>& sceneObjects) {
+void VulkanRenderer::update(const std::vector<SceneObject>& sceneObjects, const Camera& camInfo) {
     VkCommandBufferBeginInfo command_buffer_begin_info {};
     command_buffer_begin_info.sType            = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
     command_buffer_begin_info.flags            = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
@@ -841,9 +841,9 @@ void VulkanRenderer::update(const std::vector<SceneObject>& sceneObjects) {
     std::array<VkClearValue, 2> clear_values {};
     clear_values[0].depthStencil.depth   = 1.0f;
     clear_values[0].depthStencil.stencil = 0.0f;
-    clear_values[1].color.float32[0]     = 0.0f;
-    clear_values[1].color.float32[1]     = 0.0f;
-    clear_values[1].color.float32[2]     = 0.0f;
+    clear_values[1].color.float32[0]     = 0.529f;
+    clear_values[1].color.float32[1]     = 0.807f;
+    clear_values[1].color.float32[2]     = 0.921f;
     clear_values[1].color.float32[3]     = 0.0f;
     
     VkRenderPassBeginInfo render_pass_begin_info {};
@@ -858,7 +858,7 @@ void VulkanRenderer::update(const std::vector<SceneObject>& sceneObjects) {
     
     vkCmdBindPipeline(command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline->getPipeline());
     
-    renderSceneObjects(sceneObjects);
+    renderSceneObjects(sceneObjects, camInfo);
     
     vkCmdEndRenderPass(command_buffer);
     

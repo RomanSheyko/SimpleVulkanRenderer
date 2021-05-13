@@ -7,6 +7,7 @@
 #include "WindowSubsystemException.h"
 #include "VulkanRenderer.h"
 #include "SceneObject.h"
+#include "Camera.h"
 
 class SDLSubsystem :
     public WindowSubsystem
@@ -20,9 +21,13 @@ private:
     std::unique_ptr<VulkanRenderer> renderer;
     std::vector<SceneObject> sceneObjects;
     std::vector<const char*> requiredInstanceExtentions;
+    
+    Camera camera;
+    
     void createSurface() override;
     void createWindow(const char* window_name, size_t width, size_t height) override;
     void loadSceneObjects();
+    void processInput();
 };
 
 #endif

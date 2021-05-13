@@ -8,6 +8,7 @@
 #include <glm/gtc/matrix_transform.hpp>
 #include <vector>
 #include "VulkanRenderer.h"
+#include "Camera.h"
 
 class Model
 {
@@ -22,7 +23,7 @@ public:
     };
     
     struct Vertex {
-        glm::vec2 positon;
+        glm::vec3 positon;
         glm::vec3 color;
         
         static std::vector<VkVertexInputBindingDescription> getBindingDescriptions();
@@ -37,7 +38,7 @@ public:
     
     void bind(VkCommandBuffer commandBuffer);
     void draw(VkCommandBuffer commandBuffer);
-    void updateUniformBuffer(uint32_t currentImage);
+    void updateUniformBuffer(uint32_t currentImage, const Camera& camInfo);
 private:
     uint32_t vertexCount;
     uint32_t indexCount;

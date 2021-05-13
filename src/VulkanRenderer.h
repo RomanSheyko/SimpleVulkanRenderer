@@ -85,6 +85,7 @@ VKAPI_ATTR VkBool32 VKAPI_CALL vulkanDebugCallback(
 
 #include "Allocator.h"
 #include "Pipeline.h"
+#include "Camera.h"
 
 #define GLM_FORCE_RADIANS
 #define GLM_FORCE_DEPTH_ZERO_TO_ONE
@@ -194,7 +195,7 @@ private:
     void createCommandPool();
     void allocateCommandBuffer();
     void createSemaphores();
-    void renderSceneObjects(const std::vector<SceneObject>& sceneObjects);
+    void renderSceneObjects(const std::vector<SceneObject>& sceneObjects, const Camera& camInfo);
 public:
     PhysicalDevice& getPhysicalDevice()
     {
@@ -292,7 +293,7 @@ public:
     void createBuffer(VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyFlags properties, VkBuffer &buffer, VkDeviceMemory &bufferMemory);
     void copyBuffer(VkBuffer srcBuffer, VkBuffer dstBuffer, VkDeviceSize size);
     
-    void update(const std::vector<SceneObject>& sceneObjects);
+    void update(const std::vector<SceneObject>& sceneObjects, const Camera& camInfo);
     void waitIdle()
     {
         vkQueueWaitIdle(queue.queue);
