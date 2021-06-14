@@ -5,7 +5,7 @@
 #include <array>
 #include <iostream>
 
-SDLSubsystem::SDLSubsystem(const char* window_name, size_t width, size_t height)
+SDLSubsystem::SDLSubsystem(const char* window_name, size_t width, size_t height) : width(width), height(height)
 {
 	SDL_Init(SDL_INIT_VIDEO | SDL_INIT_EVENTS);
 	window = nullptr;
@@ -49,7 +49,8 @@ SDLSubsystem::SDLSubsystem(const char* window_name, size_t width, size_t height)
 void SDLSubsystem::createWindow(const char* window_name, size_t width, size_t height)
 {
 	window = SDL_CreateWindow(window_name, SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, (int)width, (int)height, SDL_WINDOW_SHOWN | SDL_WINDOW_VULKAN);
-    //SDL_SetWindowGrab(window, SDL_TRUE);
+    SDL_SetWindowGrab(window, SDL_TRUE);
+    //SDL_SetRelativeMouseMode(SDL_TRUE);
 	if (window == nullptr)
 	{
 		throw WindowSubsystemException("Error creating a window");
@@ -113,6 +114,7 @@ SDLSubsystem::~SDLSubsystem()
 }
 
 void SDLSubsystem::loadSceneObjects() {
+    /*
     std::vector<Model::Vertex> vertices = {
         //Front face
         {{-0.5f, -0.5f, 0.5f}, {1.0f, 0.0f, 0.0f}},
@@ -146,7 +148,7 @@ void SDLSubsystem::loadSceneObjects() {
         {{-0.5f, 0.5f, -0.5f}, {1.0f, 1.0f, 1.0f}}
     };
     
-    std::vector<uint16_t> indices = {
+    std::vector<uint32_t> indices = {
         0,  1,  2,      0,  2,  3,    // front
         4,  5,  6,      4,  6,  7,    // back
         8,  9,  10,     8,  10, 11,   // top
@@ -154,6 +156,38 @@ void SDLSubsystem::loadSceneObjects() {
         16, 17, 18,     16, 18, 19,   // right
         20, 21, 22,     20, 22, 23    // left
     };
+     */
+    std::vector<Model::Vertex> vertices;
+    std::vector<uint32_t> indices;
+    
+    tinyobj::attrib_t attrib;
+    std::vector<tinyobj::shape_t> shapes;
+    std::vector<tinyobj::material_t> materials;
+    std::string warn, err;
+
+    if (!tinyobj::LoadObj(&attrib, &shapes, &materials, &warn, &err, MODEL_PATH.c_str())) {
+        throw std::runtime_error(warn + err);
+    }
+    float w = 0.0f;
+    for (const auto& shape : shapes) {
+        for (const auto& index : shape.mesh.indices) {
+            Model::Vertex vertex{};
+            
+            vertex.positon = {
+                attrib.vertices[3 * index.vertex_index + 0],
+                attrib.vertices[3 * index.vertex_index + 1],
+                attrib.vertices[3 * index.vertex_index + 2]
+            };
+            
+            //vertex.color = {static_cast <float> (rand()) / (static_cast <float> (RAND_MAX/1.0f)), static_cast <float> (rand()) / (static_cast <float> (RAND_MAX/1.0f)), static_cast <float> (rand()) / (static_cast <float> (RAND_MAX/1.0f))};
+            
+            vertex.color = {1.0f, 1.0f, 1.0f};
+
+            vertices.push_back(vertex);
+            indices.push_back(indices.size());
+        }
+        if(w < 1.0f) w += 0.1f;
+    }
     
     auto model = std::make_shared<Model>(*renderer.get(), vertices, indices);
     
@@ -174,6 +208,16 @@ void SDLSubsystem::processInput() {
     
     int xpos, ypos;
     SDL_GetMouseState(&xpos, &ypos);
+    if(xpos == 0 || ypos == 0 || xpos == width - 1 || ypos == height - 1)
+    {
+        int x = width/2;
+        int y = height/2;
+        SDL_WarpMouseInWindow(window, x, y);
+        camera.reset_mouse_pos(static_cast<double>(x), static_cast<double>(y));
+        return;
+    }
+    
+    //std::cout << "x: " << xpos << "\ny: " << ypos << std::endl;
     
     camera.update(static_cast<double>(xpos), static_cast<double>(ypos));
 }

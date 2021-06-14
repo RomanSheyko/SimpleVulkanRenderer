@@ -19,6 +19,7 @@ public:
     void moveRight();
     
     void update(double xpos, double ypos);
+    void reset_mouse_pos(double xpos, double ypos);
     
     glm::vec3 getPos() const;
     glm::vec3 getFront() const;

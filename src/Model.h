@@ -30,7 +30,7 @@ public:
         static std::vector<VkVertexInputAttributeDescription> getAttributeDescriptions();
     };
     
-    Model(VulkanRenderer& renderer, const std::vector<Vertex> &vertices, const std::vector<uint16_t> &indices);
+    Model(VulkanRenderer& renderer, const std::vector<Vertex> &vertices, const std::vector<uint32_t> &indices);
     ~Model();
     
     Model(const Model&) = delete;
@@ -52,7 +52,7 @@ private:
     std::vector<VkDescriptorSet> descriptorSets;
     
     void createVertexBuffers(const std::vector<Vertex> &vertices);
-    void createIndexBuffers(const std::vector<uint16_t> &indices);
+    void createIndexBuffers(const std::vector<uint32_t> &indices);
     void createUniformBuffers();
     void createDescriptorSets();
 };

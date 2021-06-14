@@ -16,7 +16,7 @@ firstMouse(true)
 }
 
 Camera::Camera() :
-cameraSpeed(2.0f),
+cameraSpeed(3.0f),
 cameraPos(glm::vec3(0.0f, 0.0f,  3.0f)),
 cameraFront(glm::vec3(0.0f, 0.0f, -1.0f)),
 cameraUp(glm::vec3(0.0f, 1.0f,  0.0f)),
@@ -102,6 +102,12 @@ void Camera::look_around_update(double xpos, double ypos) {
     direction.z = sin(glm::radians(yaw)) * cos(glm::radians(pitch));
     cameraFront = glm::normalize(direction);
 }
+
+void Camera::reset_mouse_pos(double xpos, double ypos) {
+    lastX = xpos;
+    lastY = ypos;
+}
+
 
 
 

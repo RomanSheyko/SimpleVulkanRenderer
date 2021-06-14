@@ -274,7 +274,7 @@ void VulkanRenderer::createLogicalDevice() {
 		VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO, //sType
 		nullptr,                                    //pNext
 		0,                                          //flags
-        queue.graphics_famaly_index,                      //queueFamilyIndex
+        queue.graphics_famaly_index,                //queueFamilyIndex
 		QUEUE_COUNT,                                //queueCount
 		priorities.data()                           //pQueuePriorities
 	};
@@ -337,7 +337,7 @@ void VulkanRenderer::createLogicalDevice() {
 		requiredDeviceLayers.data(),               //ppEnabledLayerNames
 		(uint32_t)requiredDeviceExtensions.size(), //enabledExtentionCount
 		requiredDeviceExtensions.data(),           //ppEnabledExtensionNames
-		&gpu.requiredDeviceFeatures                    //pEnabledFeatures
+		&gpu.requiredDeviceFeatures                //pEnabledFeatures
 	};
 
 	if (vkCreateDevice(gpu.physicalDevices[gpu.number_of_selected_device], &deviceCreateInfo, allocator, &logical_device) != VK_SUCCESS) {
@@ -651,6 +651,7 @@ void VulkanRenderer::init()
     createRenderPass();
     createFramebuffers();
     createCommandPool();
+    
     createSemaphores();
     allocateCommandBuffer();
     createSync();

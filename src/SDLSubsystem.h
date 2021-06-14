@@ -8,6 +8,9 @@
 #include "VulkanRenderer.h"
 #include "SceneObject.h"
 #include "Camera.h"
+#include "tiny_obj_loader.h"
+
+const std::string MODEL_PATH = "/Users/roman/Downloads/obj/Handgun_obj.obj";
 
 class SDLSubsystem :
     public WindowSubsystem
@@ -21,6 +24,9 @@ private:
     std::unique_ptr<VulkanRenderer> renderer;
     std::vector<SceneObject> sceneObjects;
     std::vector<const char*> requiredInstanceExtentions;
+    
+    size_t width;
+    size_t height;
     
     Camera camera;
     

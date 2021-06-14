@@ -17,7 +17,7 @@ void Model::createVertexBuffers(const std::vector<Vertex> &vertices) {
     vkUnmapMemory(renderer.getDevice(), vertexBufferMemory);
 }
 
-void Model::createIndexBuffers(const std::vector<uint16_t> &indices) {
+void Model::createIndexBuffers(const std::vector<uint32_t> &indices) {
     indexCount = static_cast<uint32_t>(indices.size());
     VkDeviceSize bufferSize = sizeof(indices[0]) * indices.size();
 
@@ -47,7 +47,7 @@ void Model::bind(VkCommandBuffer commandBuffer) {
     VkBuffer buffers[] = {vertexBuffer};
     VkDeviceSize offsets[] = {0};
     vkCmdBindVertexBuffers(commandBuffer, 0, 1, buffers, offsets);
-    vkCmdBindIndexBuffer(commandBuffer, indexBuffer, 0, VK_INDEX_TYPE_UINT16);
+    vkCmdBindIndexBuffer(commandBuffer, indexBuffer, 0, VK_INDEX_TYPE_UINT32);
     vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, renderer.getPipelineLayout(), 0, 1, &descriptorSets[renderer.getSwapchain().active_swapchain_image_id], 0, nullptr);
 }
 
@@ -65,7 +65,7 @@ Model::~Model() {
 }
 
 
-Model::Model(VulkanRenderer& renderer, const std::vector<Vertex> &vertices, const std::vector<uint16_t> &indices) : renderer(renderer) {
+Model::Model(VulkanRenderer& renderer, const std::vector<Vertex> &vertices, const std::vector<uint32_t> &indices) : renderer(renderer) {
     createVertexBuffers(vertices);
     createIndexBuffers(indices);
     createUniformBuffers();
@@ -89,11 +89,11 @@ void Model::updateUniformBuffer(uint32_t currentImage, const Camera& camInfo) {
     float time = std::chrono::duration<float, std::chrono::seconds::period>(currentTime - startTime).count();
     
     UniformBufferObject ubo{};
-    ubo.model = glm::rotate(glm::mat4(1.0f), time * glm::radians(90.0f), glm::vec3(0.0f, 0.0f, 1.0f));
-    //ubo.model = glm::mat4(1.0f);
+    //ubo.model = glm::rotate(glm::mat4(1.0f), time * glm::radians(90.0f), glm::vec3(0.0f, 0.0f, 1.0f));
+    ubo.model = glm::mat4(1.0f);
     //ubo.view = glm::lookAt(glm::vec3(2.0f, 2.0f, 2.0f), glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(0.0f, 0.0f, 1.0f));
     ubo.view = glm::lookAt(camInfo.getPos(), camInfo.getPos() + camInfo.getFront(), camInfo.getUp());
-    ubo.proj = glm::perspective(glm::radians(45.0f), renderer.getSurface().surface_size_x / (float) renderer.getSurface().surface_size_y, 0.1f, 10.0f);
+    ubo.proj = glm::perspective(glm::radians(45.0f), renderer.getSurface().surface_size_x / (float) renderer.getSurface().surface_size_y, 0.1f, 100.0f);
     ubo.proj[1][1] *= -1;
     void* data;
     vkMapMemory(renderer.getDevice(), uniformBuffersMemory[currentImage], 0, sizeof(ubo), 0, &data);
